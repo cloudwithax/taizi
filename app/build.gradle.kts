@@ -13,7 +13,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "1.0.0-release"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -26,20 +26,43 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val releaseKeystore = file("${rootDir}/app/keystore/release.keystore")
+            
+            // Fallback to debug keystore if release keystore doesn't exist
+            if (releaseKeystore.exists()) {
+                storeFile = releaseKeystore
+                storePassword = "taizirelease"
+                keyAlias = "taizi"
+                keyPassword = "taizirelease"
+            } else {
+                val debugConfig = signingConfigs.getByName("debug")
+                storeFile = debugConfig.storeFile
+                storePassword = debugConfig.storePassword
+                keyAlias = debugConfig.keyAlias
+                keyPassword = debugConfig.keyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             isMinifyEnabled = false
+            isDebuggable = true
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            isDebuggable = false
+            isCrunchPngs = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug") // Replace with release key later
         }
     }
 
