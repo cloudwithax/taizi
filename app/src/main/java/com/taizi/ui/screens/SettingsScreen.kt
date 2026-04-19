@@ -14,13 +14,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.taizi.domain.repository.LibraryRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: MainViewModel = viewModel(),
+    viewModel: MainViewModel = hiltViewModel(),
     onNavigateUp: () -> Unit
 ) {
     val library = viewModel.uiState.collectAsState().value

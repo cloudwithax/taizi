@@ -23,7 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.taizi.domain.model.Game
@@ -36,7 +36,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 @Composable
 fun GameListScreen(
     systemId: String,
-    viewModel: MainViewModel = viewModel(),
+    viewModel: MainViewModel = hiltViewModel(),
     onGameClick: (Game) -> Unit,
     onBack: () -> Unit
 ) {

@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("kotlin-kapt")
     id("com.google.dagger.hilt.android") version "2.51"
 }
 
@@ -85,7 +86,7 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.5"
+        kotlinCompilerExtensionVersion = "1.5.14"
     }
 
     packaging {
@@ -126,6 +127,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
     implementation("androidx.navigation:navigation-compose:2.8.4")
 
+    // Material Components (for theme)
+    implementation("com.google.android.material:material:1.12.0")
+
     // Image loading
     implementation("io.coil-kt:coil-compose:2.7.0")
 
@@ -140,7 +144,7 @@ dependencies {
 
     // Hilt (DI)
     implementation("com.google.dagger:hilt-android:2.51")
-    implementation("com.google.dagger:hilt-compiler:2.51")
+    kapt("com.google.dagger:hilt-compiler:2.51")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     // File access (SAF)
