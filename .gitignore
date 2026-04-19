@@ -1,0 +1,116 @@
+# Gradle files
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+local.defaults.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+
+# Kotlin
+*.class
+*.kotlin_module
+.kotlin/
+
+# Android captures
+/captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.ap_
+*.aab
+
+# Keystore files
+*.jks
+*.keystore
+key.properties
+
+# Google Services (e.g. APIs or Firebase)
+google-services.json
+
+# Firebase Crashlytics
+fabric.properties
+crashlytics.properties
+crashlytics-build.properties
+
+# ProGuard
+proguard-rules.pro
+proguard/
+
+# Log files
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
+
+# IDE
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Node (if using React Native or similar)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Python (if using scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Docker
+docker-compose.override.yml
+
+# Local env files
+.env
+.env.local
+
+# Build outputs
+app/release/
+app/debug/
+*.mapping
+
+# Test outputs
+test-results/
+screenshots/
+
+# lint
+lint/intermediates/
+lint/generated/
+lint/outputs/
+lint/tmp/
+
+# Hilt
+.hilt/
+
+# Navigation safe args
+.navigation/
+
+# Version control
+*.orig
+
+# Large files
+*.zip
+*.tar.gz
+*.rar

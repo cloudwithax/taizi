@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Taizi</string>
+    <string name="status_bar_wifi">WiFi</string>
+    <string name="status_bar_battery">Battery</string>
+    <string name="system_list_title">Systems</string>
+    <string name="game_list_title">Games</string>
+    <string name="settings_title">Settings</string>
+    <string name="scan_button">Scan</string>
+    <string name="add_button">Add</string>
+    <string name="launch_button">Launch</string>
+    <string name="back_button">Back</string>
+    <string name="search_hint">Search games…</string>
+    <string name="bios_missing">BIOS Missing</string>
+    <string name="bios_present">BIOS OK</string>
+    <string name="multi_disc">%d discs</string>
+    <string name="unknown_system">Unknown System</string>
+    <string name="mapping_title">Map System</string>
+    <string name="mapping_message">Folder "%s" not recognized. Please select the correct system:</string>
+    <string name="scan_progress">Scanning: %s</string>
+    <string name="scan_complete">Scan complete: %d games found</string>
+    <string name="no_games">No games found</string>
+    <string name="no_emulator">No emulator installed</string>
+    <string name="choose_emulator">Choose Emulator</string>
+    <string name="setup_wizard_title">Setup Wizard</string>
+    <string name="setup_select_rom_root">Select ROM Root Folder</string>
+    <string name="setup_scan_library">Scan Library</string>
+    <string name="setup_configure_emulators">Configure Emulators</string>
+    <string name="setup_complete">Setup Complete</string>
+</resources>

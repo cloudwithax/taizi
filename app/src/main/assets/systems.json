@@ -1,0 +1,125 @@
+{
+  "version": "1.0",
+  "systems": {
+    "gb": {
+      "id": "gb",
+      "name": "Game Boy",
+      "folderNames": ["gb", "gameboy", "gbc", "gameboycolor"],
+      "extensions": [".gb", ".gbc"],
+      "emulator": "retroarch",
+      "core": "gambatte",
+      "bios": ["gb_bios.bin", "gbc_bios.bin"],
+      "theme": "gb"
+    },
+    "gba": {
+      "id": "gba",
+      "name": "Game Boy Advance",
+      "folderNames": ["gba", "gameboyadvance"],
+      "extensions": [".gba"],
+      "emulator": "retroarch",
+      "core": "gpsp",
+      "bios": ["gba_bios.bin"],
+      "theme": "gba"
+    },
+    "nes": {
+      "id": "nes",
+      "name": "Nintendo Entertainment System",
+      "folderNames": ["nes", "nintendoentertainmentsystem", "famicom"],
+      "extensions": [".nes", ".fds"],
+      "emulator": "retroarch",
+      "core": "fceumm",
+      "bios": [],
+      "theme": "nes"
+    },
+    "snes": {
+      "id": "snes",
+      "name": "Super Nintendo",
+      "folderNames": ["snes", "supernes", "supernintendo", "sfc"],
+      "extensions": [".sfc", ".smc", ".fig"],
+      "emulator": "retroarch",
+      "core": "snes9x",
+      "bios": [],
+      "theme": "snes"
+    },
+    "n64": {
+      "id": "n64",
+      "name": "Nintendo 64",
+      "folderNames": ["n64", "nintendo64"],
+      "extensions": [".z64", ".n64", ".v64"],
+      "emulator": "retroarch",
+      "core": "mupen64plus",
+      "bios": [],
+      "theme": "n64"
+    },
+    "psx": {
+      "id": "psx",
+      "name": "PlayStation",
+      "folderNames": ["psx", "playstation", "ps1", "psone"],
+      "extensions": [".bin", ".img", ".iso", ".cue", ".chd"],
+      "emulator": "duckstation",
+      "core": null,
+      "bios": ["scph1001.bin", "scph5501.bin", "scph5502.bin", "scph5552.bin"],
+      "theme": "psx"
+    },
+    "psp": {
+      "id": "psp",
+      "name": "PlayStation Portable",
+      "folderNames": ["psp", "playstationportable"],
+      "extensions": [".iso", ".cso"],
+      "emulator": "ppsspp",
+      "core": null,
+      "bios": [],
+      "theme": "psp"
+    },
+    "nds": {
+      "id": "nds",
+      "name": "Nintendo DS",
+      "folderNames": ["nds", "nintendo ds"],
+      "extensions": [".nds"],
+      "emulator": "drastic",
+      "core": null,
+      "bios": [],
+      "theme": "nds"
+    },
+    "dc": {
+      "id": "dc",
+      "name": "Dreamcast",
+      "folderNames": ["dc", "dreamcast"],
+      "extensions": [".gdi", ".cdi", ".chd"],
+      "emulator": "flycast",
+      "core": null,
+      "bios": ["dc_boot.bin", "dc_flash.bin"],
+      "theme": "dc"
+    },
+    "mame": {
+      "id": "mame",
+      "name": "MAME",
+      "folderNames": ["mame", "arcade"],
+      "extensions": [".zip"],
+      "emulator": "retroarch",
+      "core": "mame2003_plus",
+      "bios": [],
+      "theme": "mame"
+    },
+    "pce": {
+      "id": "pce",
+      "name": "PC Engine",
+      "folderNames": ["pce", "pcengine", "turbografx", "tg16"],
+      "extensions": [".pce", ".cue", ".bin"],
+      "emulator": "retroarch",
+      "core": "beetle_pce",
+      "bios": ["syscard3.pce"],
+      "theme": "pce"
+    },
+    "atari2600": {
+      "id": "atari2600",
+      "name": "Atari 2600",
+      "folderNames": ["atari2600", "atari 2600"],
+      "extensions": [".a26", ".bin"],
+      "emulator": "retroarch",
+      "core": "stella",
+      "bios": [],
+      "theme": "atari2600"
+    }
+  }
+}
