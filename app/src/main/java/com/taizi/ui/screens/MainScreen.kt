@@ -1,5 +1,9 @@
 package com.taizi.ui.screens
 
+import android.net.Uri
+import android.os.Environment
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons as MaterialIcons
 import androidx.compose.material.icons.filled.*
@@ -17,6 +21,22 @@ import com.taizi.domain.model.Library
 import com.taizi.domain.model.System
 import com.taizi.ui.components.StatusBar
 import com.taizi.ui.theme.TaiziTheme
+
+private fun treeUriToFilePath(uri: Uri): String? {
+    val docId = uri.lastPathSegment ?: return null
+    // Document IDs look like "primary:roms" or "XXXX-XXXX:roms"
+    val split = docId.split(":")
+    if (split.size < 2) return null
+    val volume = split[0]
+    val relativePath = split[1]
+    val root = if (volume == "primary") {
+        Environment.getExternalStorageDirectory().absolutePath
+    } else {
+        "/storage/$volume"
+    }
+    return "$root/$relativePath"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -27,12 +47,21 @@ fun MainScreen(
 
     var showScanningDialog by remember { mutableStateOf(false) }
 
-    // Handle scanning state
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val path = treeUriToFilePath(uri)
+            if (path != null) {
+                viewModel.triggerFullScan(path)
+            }
+        }
+    }
+
     LaunchedEffect(uiState) {
         showScanningDialog = uiState is MainUiState.Scanning
     }
 
-    // Scanning dialog
     if (showScanningDialog) {
         ScanningDialog()
     }
@@ -107,10 +136,7 @@ fun MainScreen(
                                 when (uiState) {
                                     is MainUiState.Scanning -> ScanningContent()
                                     else -> InitialSetupContent(
-                                        onSelectFolder = {
-                                            // TODO: Folder picker
-                                            viewModel.triggerFullScan()
-                                        }
+                                        onSelectFolder = { folderPickerLauncher.launch(null) }
                                     )
                                 }
                             }
