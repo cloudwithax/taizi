@@ -337,37 +337,44 @@ private fun BiosChip() {
 
 @Composable
 private fun PagerDots(count: Int, current: Int, activeColor: Color) {
-    val displayCount = count.coerceAtMost(9)
+    if (count <= 0) return
+    // Scale the dot size down as the system count grows so N dots
+    // always fit on-screen without overflow text.
+    val dotSize = when {
+        count <= 10 -> 6f
+        count <= 20 -> 5f
+        count <= 40 -> 4f
+        else -> 3f
+    }
+    val gap = when {
+        count <= 10 -> 3f
+        count <= 20 -> 2.5f
+        count <= 40 -> 2f
+        else -> 1.5f
+    }
+    val activeWidth = dotSize * 3f
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        repeat(displayCount) { i ->
-            val isActive = i == (current.coerceAtMost(displayCount - 1))
+        repeat(count) { i ->
+            val isActive = i == current
             val width by animateFloatAsState(
-                targetValue = if (isActive) 18f else 6f,
+                targetValue = if (isActive) activeWidth else dotSize,
                 animationSpec = tween(220),
                 label = "dot"
             )
             Box(
                 modifier = Modifier
-                    .padding(horizontal = 3.dp)
-                    .height(6.dp)
+                    .padding(horizontal = gap.dp)
+                    .height(dotSize.dp)
                     .width(width.dp)
                     .clip(CircleShape)
                     .background(
                         if (isActive) activeColor
                         else MaterialTheme.colorScheme.outline
                     )
-            )
-        }
-        if (count > displayCount) {
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "${current + 1}/$count",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
