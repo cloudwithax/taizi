@@ -151,13 +151,19 @@ class LibraryRepositoryImpl(
                     }
                 }
 
+                // Only surface systems that actually have ROMs on disk
+                val populatedSystems = systems.filter { (gamesBySystem[it.id]?.size ?: 0) > 0 }
+                val populatedGames = gamesBySystem.filterKeys { id ->
+                    populatedSystems.any { it.id == id }
+                }
+
                 val library = Library(
-                    systems = systems,
-                    gamesBySystem = gamesBySystem,
+                    systems = populatedSystems,
+                    gamesBySystem = populatedGames,
                     biosStatus = biosStatus,
                     lastScanned = java.lang.System.currentTimeMillis(),
                     romRoot = romRoot,
-                    unmappedSystems = systems.filter { it.isCustom && it.mappedFrom != null }
+                    unmappedSystems = populatedSystems.filter { it.isCustom && it.mappedFrom != null }
                         .map { it.mappedFrom!! }
                 )
 
