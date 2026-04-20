@@ -101,13 +101,24 @@ class LibraryRepositoryImpl(
                 val gameFolders: List<File> = if (biosFolder != null) systemFolders - biosFolder else systemFolders
 
                 // Scan each system folder in parallel (limited concurrency)
-                val systems = coroutineScope {
+                val rawSystems = coroutineScope {
                     gameFolders.map { folder: File ->
                         async(Dispatchers.IO) {
                             scanSystemFolder(folder, customMappings)
                         }
                     }.awaitAll().filterNotNull()
                 }
+
+                // Multiple SD folders can map to the same system id (HBMAME, arcade,
+                // mame-mame4all -> "mame"; cps, cps1 -> "cps1"). Group by id, keep
+                // one canonical System per id, and track every source folder so we
+                // can merge ROM files across all of them.
+                val foldersById: Map<String, List<File>> = rawSystems
+                    .groupBy { it.id }
+                    .mapValues { (_, group) -> group.map { File(it.path) } }
+                val systems: List<System> = rawSystems
+                    .groupBy { it.id }
+                    .map { (_, group) -> group.maxBy { it.romCount } }
 
                 // Scan BIOS folder if exists
                 val biosStatus = if (biosFolder != null) {
@@ -116,8 +127,15 @@ class LibraryRepositoryImpl(
                     emptyMap()
                 }
 
-                // First pass: collect ROM files per system so we know the total up front
-                val filesBySystem: Map<System, List<File>> = systems.associateWith { collectRomFiles(it) }
+                // First pass: collect ROM files per system from every source folder,
+                // deduped by canonical path. Knowing the total up front lets the
+                // progress UI show a stable "n / total" count.
+                val filesBySystem: Map<System, List<File>> = systems.associateWith { sys ->
+                    val seen = hashSetOf<String>()
+                    (foldersById[sys.id] ?: listOf(File(sys.path))).flatMap { folder ->
+                        collectRomFiles(folder, sys.id)
+                    }.filter { seen.add(it.absolutePath) }
+                }
                 val total = filesBySystem.values.sumOf { it.size }
 
                 // Second pass: parse and report live progress per ROM
@@ -155,8 +173,12 @@ class LibraryRepositoryImpl(
                     }
                 }
 
-                // Only surface systems that actually have ROMs on disk
-                val populatedSystems = systems.filter { (gamesBySystem[it.id]?.size ?: 0) > 0 }
+                // Only surface systems that actually have ROMs on disk, and make
+                // sure romCount reflects the merged total (not the single folder
+                // that scanSystemFolder happened to pick first).
+                val populatedSystems = systems
+                    .filter { (gamesBySystem[it.id]?.size ?: 0) > 0 }
+                    .map { sys -> sys.copy(romCount = gamesBySystem[sys.id]?.size ?: 0) }
                 val populatedGames = gamesBySystem.filterKeys { id ->
                     populatedSystems.any { it.id == id }
                 }
@@ -296,11 +318,10 @@ class LibraryRepositoryImpl(
         return count
     }
 
-    private fun collectRomFiles(system: System): List<File> {
-        val folder = File(system.path)
+    private fun collectRomFiles(folder: File, systemId: String): List<File> {
         if (!folder.exists()) return emptyList()
 
-        val def = systemDefinitions[system.id] ?: return emptyList()
+        val def = systemDefinitions[systemId] ?: return emptyList()
         val validExtensions = def.extensions.map { it.lowercase() }.toSet()
 
         val romFiles = mutableListOf<File>()
@@ -318,11 +339,6 @@ class LibraryRepositoryImpl(
         collectROMs(folder, 1)
         return romFiles
     }
-
-    private fun scanGamesForSystem(system: System): List<Game> =
-        collectRomFiles(system)
-            .map { parseGameFile(it, system.id) }
-            .sortedBy { it.name.lowercase() }
 
     private fun parseGameFile(file: File, systemId: String): Game {
         val filename = file.nameWithoutExtension
@@ -417,7 +433,9 @@ class LibraryRepositoryImpl(
             val newSystem = scanSystemFolder(File(system.path), localDataSource.getCustomMappings())
             if (newSystem != null) {
                 val newSystems = currentLibrary.systems.map { if (it.id == systemId) newSystem else it }
-                val newGames = scanGamesForSystem(newSystem)
+                val newGames = collectRomFiles(File(newSystem.path), newSystem.id)
+                    .map { parseGameFile(it, newSystem.id) }
+                    .sortedBy { it.name.lowercase() }
 
                 val newLibrary = currentLibrary.copy(
                     systems = newSystems,
