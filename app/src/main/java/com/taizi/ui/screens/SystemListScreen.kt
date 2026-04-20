@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -338,44 +341,48 @@ private fun BiosChip() {
 @Composable
 private fun PagerDots(count: Int, current: Int, activeColor: Color) {
     if (count <= 0) return
-    // Scale the dot size down as the system count grows so N dots
-    // always fit on-screen without overflow text.
-    val dotSize = when {
-        count <= 10 -> 6f
-        count <= 20 -> 5f
-        count <= 40 -> 4f
-        else -> 3f
+    val dotSize = 6.dp
+    val activeWidth = 18.dp
+    val gap = 4.dp
+    val windowSize = minOf(count, 20)
+    val anchor = (windowSize - 1) / 2
+    val maxStart = (count - windowSize).coerceAtLeast(0)
+    val windowStart = (current - anchor).coerceIn(0, maxStart)
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(windowStart) {
+        listState.animateScrollToItem(windowStart)
     }
-    val gap = when {
-        count <= 10 -> 3f
-        count <= 20 -> 2.5f
-        count <= 40 -> 2f
-        else -> 1.5f
-    }
-    val activeWidth = dotSize * 3f
-    Row(
+
+    Box(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+        contentAlignment = Alignment.Center
     ) {
-        repeat(count) { i ->
-            val isActive = i == current
-            val width by animateFloatAsState(
-                targetValue = if (isActive) activeWidth else dotSize,
-                animationSpec = tween(220),
-                label = "dot"
-            )
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = gap.dp)
-                    .height(dotSize.dp)
-                    .width(width.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isActive) activeColor
-                        else MaterialTheme.colorScheme.outline
-                    )
-            )
+        LazyRow(
+            state = listState,
+            userScrollEnabled = false,
+            horizontalArrangement = Arrangement.spacedBy(gap),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.width(216.dp)
+        ) {
+            items(count, key = { it }) { i ->
+                val isActive = i == current
+                val width by animateFloatAsState(
+                    targetValue = if (isActive) activeWidth.value else dotSize.value,
+                    animationSpec = tween(220),
+                    label = "dot"
+                )
+                Box(
+                    modifier = Modifier
+                        .height(dotSize)
+                        .width(width.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isActive) activeColor
+                            else MaterialTheme.colorScheme.outline
+                        )
+                )
+            }
         }
     }
 }
