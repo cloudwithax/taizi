@@ -235,6 +235,19 @@ class LibraryRepositoryImpl(
         )
     }
 
+    private fun isSkippableDir(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower in SKIP_DIRS || lower.startsWith(".")
+    }
+
+    private fun isRomFile(file: File, validExtensions: Set<String>): Boolean {
+        val name = file.name
+        if (name.startsWith(".") || name.startsWith("_")) return false
+        if (name.lowercase() in SKIP_FILES) return false
+        val ext = ".${file.extension.lowercase()}"
+        return ext in validExtensions || ext in ARCHIVE_EXTENSIONS
+    }
+
     private fun countFilesWithExtension(
         folder: File,
         extensions: Set<String>,
@@ -245,17 +258,10 @@ class LibraryRepositoryImpl(
             if (depth > maxDepth) return
             dir.listFiles()?.forEach { file ->
                 if (file.isDirectory) {
-                    if (file.name.equals("bios", true) ||
-                        file.name.equals("images", true) ||
-                        file.name.equals("imgs", true)) {
-                        return@forEach
-                    }
+                    if (isSkippableDir(file.name)) return@forEach
                     scan(file, depth + 1)
-                } else {
-                    val ext = ".${file.extension.lowercase()}"
-                    if (ext in extensions) {
-                        count++
-                    }
+                } else if (isRomFile(file, extensions)) {
+                    count++
                 }
             }
         }
@@ -275,17 +281,10 @@ class LibraryRepositoryImpl(
             if (depth > 2) return
             dir.listFiles()?.forEach { file ->
                 if (file.isDirectory) {
-                    if (file.name.equals("bios", true) ||
-                        file.name.equals("images", true) ||
-                        file.name.equals("imgs", true)) {
-                        return@forEach
-                    }
+                    if (isSkippableDir(file.name)) return@forEach
                     collectROMs(file, depth + 1)
-                } else {
-                    val ext = ".${file.extension.lowercase()}"
-                    if (ext in validExtensions) {
-                        romFiles.add(file)
-                    }
+                } else if (isRomFile(file, validExtensions)) {
+                    romFiles.add(file)
                 }
             }
         }
@@ -1030,5 +1029,16 @@ class LibraryRepositoryImpl(
 
     companion object {
         const val ALL_EVENTS = FileObserver.ALL_EVENTS
+        val ARCHIVE_EXTENSIONS = setOf(".zip", ".7z", ".rar")
+        val SKIP_DIRS = setOf(
+            "bios", "images", "imgs", "media", "manuals", "videos", "video",
+            "screenshots", "marquees", "box", "boxart", "cover", "covers",
+            "downloaded_images", "gamelist", "cheats", "saves", "savestates",
+            "states", "patches", "overlays", "shaders", "textures"
+        )
+        val SKIP_FILES = setOf(
+            "gamelist.xml", "systeminfo.txt", "metadata.txt", "_info.txt",
+            "desktop.ini", "thumbs.db", ".ds_store"
+        )
     }
 }
