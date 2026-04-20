@@ -595,35 +595,153 @@ class LibraryRepositoryImpl(
 
     private fun builtInSystemDefinitions(): Map<String, SystemDefinition> {
         return mapOf(
-            "gb" to SystemDefinition("gb", "Game Boy", listOf("gb", "gameboy", "sgb"), listOf(".gb"), "retroarch", "gambatte", listOf("gb_bios.bin"), "gb"),
-            "gbc" to SystemDefinition("gbc", "Game Boy Color", listOf("gbc", "gameboycolor"), listOf(".gbc"), "retroarch", "gambatte", listOf("gbc_bios.bin"), "gbc"),
-            "gba" to SystemDefinition("gba", "Game Boy Advance", listOf("gba", "gameboyadvance"), listOf(".gba"), "retroarch", "gpsp", listOf("gba_bios.bin"), "gba"),
-            "nes" to SystemDefinition("nes", "Nintendo Entertainment System", listOf("nes", "nintendoentertainmentsystem", "famicom"), listOf(".nes", ".fds"), "retroarch", "fceumm", emptyList(), "nes"),
-            "snes" to SystemDefinition("snes", "Super Nintendo", listOf("snes", "supernes", "supernintendo", "sfc"), listOf(".sfc", ".smc", ".fig"), "retroarch", "snes9x", emptyList(), "snes"),
-            "n64" to SystemDefinition("n64", "Nintendo 64", listOf("n64", "nintendo64"), listOf(".z64", ".n64", ".v64"), "retroarch", "mupen64plus_next_gles3", emptyList(), "n64"),
-            "nds" to SystemDefinition("nds", "Nintendo DS", listOf("nds", "nintendo ds"), listOf(".nds"), "drastic", null, emptyList(), "nds"),
-            "psx" to SystemDefinition("psx", "PlayStation", listOf("psx", "playstation", "ps1", "psone"), listOf(".bin", ".img", ".iso", ".cue", ".chd"), "duckstation", "pcsx_rearmed", listOf("scph1001.bin", "scph5501.bin", "scph5502.bin", "scph5552.bin"), "psx"),
-            "psp" to SystemDefinition("psp", "PlayStation Portable", listOf("psp", "playstationportable"), listOf(".iso", ".cso"), "ppsspp", null, emptyList(), "psp"),
-            "dc" to SystemDefinition("dc", "Dreamcast", listOf("dc", "dreamcast"), listOf(".gdi", ".cdi", ".chd"), "flycast", null, listOf("dc_boot.bin", "dc_flash.bin"), "dc"),
-            "mame" to SystemDefinition("mame", "MAME", listOf("mame", "arcade"), listOf(".zip"), "retroarch", "mame2003_plus", emptyList(), "mame"),
-            "pce" to SystemDefinition("pce", "PC Engine", listOf("pce", "pcengine", "turbografx", "tg16"), listOf(".pce", ".cue", ".bin"), "retroarch", "mednafen_pce_fast", listOf("syscard3.pce"), "pce"),
-            "atari2600" to SystemDefinition("atari2600", "Atari 2600", listOf("atari2600", "atari 2600"), listOf(".a26", ".bin"), "retroarch", "stella", emptyList(), "atari2600"),
-            "genesis" to SystemDefinition("genesis", "Sega Genesis", listOf("genesis", "megadrive", "md", "mega drive", "sega genesis"), listOf(".md", ".gen", ".smd", ".bin"), "retroarch", "genesis_plus_gx", emptyList(), "genesis"),
-            "sms" to SystemDefinition("sms", "Sega Master System", listOf("sms", "mastersystem", "master system"), listOf(".sms", ".bin"), "retroarch", "genesis_plus_gx", emptyList(), "sms"),
-            "gamegear" to SystemDefinition("gamegear", "Sega Game Gear", listOf("gg", "gamegear", "game gear"), listOf(".gg", ".bin"), "retroarch", "genesis_plus_gx", emptyList(), "gamegear"),
-            "saturn" to SystemDefinition("saturn", "Sega Saturn", listOf("saturn", "segasaturn"), listOf(".cue", ".bin", ".iso", ".chd", ".mds"), "retroarch", "kronos", listOf("saturn_bios.bin"), "saturn"),
-            "segacd" to SystemDefinition("segacd", "Sega CD", listOf("segacd", "sega cd", "megacd", "mega cd"), listOf(".cue", ".bin", ".iso", ".chd"), "retroarch", "genesis_plus_gx", listOf("bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin"), "segacd"),
-            "neogeo" to SystemDefinition("neogeo", "Neo Geo", listOf("neogeo", "neo geo", "aes", "mvs"), listOf(".zip", ".neo"), "retroarch", "fbneo", listOf("neogeo.zip"), "neogeo"),
-            "ngpc" to SystemDefinition("ngpc", "Neo Geo Pocket Color", listOf("ngpc", "ngp", "neo geo pocket", "neogeopocket"), listOf(".ngc", ".ngp"), "retroarch", "beetle_ngp", emptyList(), "ngpc"),
-            "atari7800" to SystemDefinition("atari7800", "Atari 7800", listOf("atari7800", "atari 7800"), listOf(".a78", ".bin"), "retroarch", "prosystem", listOf("7800 BIOS (U).rom"), "atari7800"),
-            "lynx" to SystemDefinition("lynx", "Atari Lynx", listOf("lynx", "atarilynx"), listOf(".lnx", ".o"), "retroarch", "handy", listOf("lynxboot.img"), "lynx"),
-            "jaguar" to SystemDefinition("jaguar", "Atari Jaguar", listOf("jaguar", "atarijaguar"), listOf(".j64", ".jag", ".bin"), "retroarch", "virtual_jaguar", emptyList(), "jaguar"),
+            // ---------- Nintendo ----------
+            "gb" to SystemDefinition("gb", "Game Boy", listOf("gb", "gameboy", "sgb", "gbh", "gb2players"), listOf(".gb"), "retroarch", "gambatte", listOf("gb_bios.bin"), "gb"),
+            "gbc" to SystemDefinition("gbc", "Game Boy Color", listOf("gbc", "gameboycolor", "gbch", "gbc2players"), listOf(".gbc"), "retroarch", "gambatte", listOf("gbc_bios.bin"), "gbc"),
+            "gba" to SystemDefinition("gba", "Game Boy Advance", listOf("gba", "gameboyadvance", "gbah", "gbav"), listOf(".gba"), "retroarch", "gpsp", listOf("gba_bios.bin"), "gba"),
+            "nes" to SystemDefinition("nes", "Nintendo Entertainment System", listOf("nes", "nintendoentertainmentsystem", "famicom", "fc", "nesh"), listOf(".nes", ".unf", ".unif"), "retroarch", "fceumm", emptyList(), "nes"),
+            "fds" to SystemDefinition("fds", "Famicom Disk System", listOf("fds", "famicomdisk"), listOf(".fds"), "retroarch", "fceumm", listOf("disksys.rom"), "fds"),
+            "snes" to SystemDefinition("snes", "Super Nintendo", listOf("snes", "supernes", "supernintendo", "sfc", "superfamicom", "snesh", "sneshd", "snesna", "snes-hacks", "snes-msu1", "snesmsu1", "satellaview", "sufami"), listOf(".sfc", ".smc", ".fig", ".swc"), "retroarch", "snes9x", emptyList(), "snes"),
+            "n64" to SystemDefinition("n64", "Nintendo 64", listOf("n64", "nintendo64", "n64dd"), listOf(".z64", ".n64", ".v64", ".ndd"), "retroarch", "mupen64plus_next_gles3", emptyList(), "n64"),
+            "gamecube" to SystemDefinition("gamecube", "GameCube", listOf("gc", "gamecube", "ngc"), listOf(".iso", ".gcm", ".gcz", ".rvz", ".wbfs", ".ciso"), "retroarch", "dolphin", emptyList(), "gamecube"),
+            "wii" to SystemDefinition("wii", "Wii", listOf("wii"), listOf(".iso", ".wbfs", ".wad", ".rvz", ".wia"), "retroarch", "dolphin", emptyList(), "wii"),
+            "nds" to SystemDefinition("nds", "Nintendo DS", listOf("nds", "nintendo ds", "ndsiware"), listOf(".nds", ".dsi"), "drastic", null, emptyList(), "nds"),
+            "3ds" to SystemDefinition("3ds", "Nintendo 3DS", listOf("3ds", "n3ds"), listOf(".3ds", ".cia", ".cci", ".3dsx"), "retroarch", "citra", emptyList(), "3ds"),
             "virtualboy" to SystemDefinition("virtualboy", "Virtual Boy", listOf("virtualboy", "virtual boy", "vb"), listOf(".vb", ".vboy"), "retroarch", "beetle_vb", emptyList(), "virtualboy"),
-            "wonderswan" to SystemDefinition("wonderswan", "WonderSwan", listOf("wonderswan", "ws", "wsc", "wonderswancolor"), listOf(".ws", ".wsc", ".pc2"), "retroarch", "beetle_wswan", emptyList(), "wonderswan"),
+            "pokemini" to SystemDefinition("pokemini", "Pokemon Mini", listOf("pokemini", "pokemonmini", "poke"), listOf(".min"), "retroarch", "pokemini", listOf("bios.min"), "pokemini"),
+            "gameandwatch" to SystemDefinition("gameandwatch", "Game & Watch", listOf("gameandwatch", "gw"), listOf(".mgw", ".zip"), "retroarch", "gw", emptyList(), "gameandwatch"),
+
+            // ---------- Sony ----------
+            "psx" to SystemDefinition("psx", "PlayStation", listOf("psx", "playstation", "ps1", "psone", "ps"), listOf(".bin", ".img", ".iso", ".cue", ".chd", ".pbp", ".ecm", ".m3u"), "duckstation", "pcsx_rearmed", listOf("scph1001.bin", "scph5501.bin", "scph5502.bin", "scph5552.bin"), "psx"),
+            "ps2" to SystemDefinition("ps2", "PlayStation 2", listOf("ps2", "playstation2"), listOf(".iso", ".cso", ".chd", ".bin", ".gz", ".mdf"), "retroarch", "pcsx2", emptyList(), "ps2"),
+            "psp" to SystemDefinition("psp", "PlayStation Portable", listOf("psp", "playstationportable", "pspminis"), listOf(".iso", ".cso", ".pbp"), "ppsspp", null, emptyList(), "psp"),
+
+            // ---------- Sega ----------
+            "genesis" to SystemDefinition("genesis", "Sega Genesis", listOf("genesis", "megadrive", "md", "mega drive", "sega genesis", "megadriveh", "genesish", "genesiswide", "megadrivejp", "megadrive-japan", "megadrivemsu", "msu-md", "msumd", "genh"), listOf(".md", ".gen", ".smd", ".bin", ".sg"), "retroarch", "genesis_plus_gx", emptyList(), "genesis"),
+            "sms" to SystemDefinition("sms", "Sega Master System", listOf("sms", "mastersystem", "master system"), listOf(".sms", ".bin"), "retroarch", "genesis_plus_gx", emptyList(), "sms"),
+            "gamegear" to SystemDefinition("gamegear", "Sega Game Gear", listOf("gg", "gamegear", "game gear", "gamegearh"), listOf(".gg", ".bin"), "retroarch", "genesis_plus_gx", emptyList(), "gamegear"),
+            "sg1000" to SystemDefinition("sg1000", "SG-1000", listOf("sg-1000", "sg1000", "sc-3000"), listOf(".sg", ".bin"), "retroarch", "genesis_plus_gx", emptyList(), "sg1000"),
+            "sega32x" to SystemDefinition("sega32x", "Sega 32X", listOf("sega32x", "32x", "sega32xjp", "sega32xna"), listOf(".32x", ".smd", ".bin"), "retroarch", "picodrive", emptyList(), "sega32x"),
+            "segacd" to SystemDefinition("segacd", "Sega CD", listOf("segacd", "sega cd", "megacd", "mega cd", "mdcd", "megacdjp"), listOf(".cue", ".bin", ".iso", ".chd"), "retroarch", "genesis_plus_gx", listOf("bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin"), "segacd"),
+            "saturn" to SystemDefinition("saturn", "Sega Saturn", listOf("saturn", "segasaturn", "saturnjp", "st-v", "stv"), listOf(".cue", ".bin", ".iso", ".chd", ".mds"), "retroarch", "kronos", listOf("saturn_bios.bin"), "saturn"),
+            "dc" to SystemDefinition("dc", "Dreamcast", listOf("dc", "dreamcast"), listOf(".gdi", ".cdi", ".chd", ".m3u"), "flycast", null, listOf("dc_boot.bin", "dc_flash.bin"), "dc"),
+            "naomi" to SystemDefinition("naomi", "Sega NAOMI", listOf("naomi", "naomi2", "naomigd", "atomiswave"), listOf(".zip", ".bin", ".chd", ".lst"), "flycast", "flycast", emptyList(), "naomi"),
+
+            // ---------- NEC ----------
+            "pce" to SystemDefinition("pce", "PC Engine", listOf("pce", "pcengine", "turbografx", "tg16", "turbografxcd", "tg16cd", "tg-cd", "pcenginecd", "pcecd"), listOf(".pce", ".cue", ".bin", ".iso", ".chd"), "retroarch", "mednafen_pce_fast", listOf("syscard3.pce"), "pce"),
+            "supergrafx" to SystemDefinition("supergrafx", "SuperGrafx", listOf("supergrafx", "sgfx"), listOf(".pce", ".sgx", ".cue", ".bin"), "retroarch", "mednafen_supergrafx", emptyList(), "supergrafx"),
+            "pcfx" to SystemDefinition("pcfx", "PC-FX", listOf("pcfx"), listOf(".cue", ".ccd", ".toc", ".chd"), "retroarch", "mednafen_pcfx", listOf("pcfx.rom"), "pcfx"),
+
+            // ---------- Atari ----------
+            "atari2600" to SystemDefinition("atari2600", "Atari 2600", listOf("atari2600", "atari 2600", "a2600"), listOf(".a26", ".bin"), "retroarch", "stella", emptyList(), "atari2600"),
+            "atari5200" to SystemDefinition("atari5200", "Atari 5200", listOf("atari5200", "atari 5200", "a5200"), listOf(".a52", ".bin"), "retroarch", "atari800", listOf("5200.rom"), "atari5200"),
+            "atari7800" to SystemDefinition("atari7800", "Atari 7800", listOf("atari7800", "atari 7800", "a7800"), listOf(".a78", ".bin"), "retroarch", "prosystem", listOf("7800 BIOS (U).rom"), "atari7800"),
+            "atari800" to SystemDefinition("atari800", "Atari 8-bit", listOf("atari800", "a800", "atarixe", "atarixegs", "xegs"), listOf(".atr", ".atx", ".xex", ".cas", ".cart", ".bin"), "retroarch", "atari800", emptyList(), "atari800"),
+            "atarist" to SystemDefinition("atarist", "Atari ST", listOf("atarist"), listOf(".st", ".stx", ".ipf", ".msa", ".dim"), "retroarch", "hatari", emptyList(), "atarist"),
+            "lynx" to SystemDefinition("lynx", "Atari Lynx", listOf("lynx", "atarilynx"), listOf(".lnx", ".o"), "retroarch", "handy", listOf("lynxboot.img"), "lynx"),
+            "jaguar" to SystemDefinition("jaguar", "Atari Jaguar", listOf("jaguar", "atarijaguar", "atarijaguarcd", "jaguarcd"), listOf(".j64", ".jag", ".bin", ".cue"), "retroarch", "virtual_jaguar", emptyList(), "jaguar"),
+
+            // ---------- SNK ----------
+            "neogeo" to SystemDefinition("neogeo", "Neo Geo", listOf("neogeo", "neo geo", "aes", "mvs"), listOf(".zip", ".neo"), "retroarch", "fbneo", listOf("neogeo.zip"), "neogeo"),
+            "neogeocd" to SystemDefinition("neogeocd", "Neo Geo CD", listOf("neogeocd", "neocd", "neogeocdjp"), listOf(".cue", ".iso", ".chd"), "retroarch", "neocd", listOf("neocd.bin"), "neogeocd"),
+            "ngpc" to SystemDefinition("ngpc", "Neo Geo Pocket Color", listOf("ngpc", "ngp", "neo geo pocket", "neogeopocket"), listOf(".ngc", ".ngp"), "retroarch", "beetle_ngp", emptyList(), "ngpc"),
+            "wonderswan" to SystemDefinition("wonderswan", "WonderSwan", listOf("wonderswan", "ws", "wsc", "wswan", "wswanc", "wonderswancolor"), listOf(".ws", ".wsc", ".pc2"), "retroarch", "beetle_wswan", emptyList(), "wonderswan"),
+
+            // ---------- Arcade ----------
+            "mame" to SystemDefinition("mame", "MAME", listOf("mame", "arcade", "mame-advmame", "mame-mame4all", "hbmame", "varcade", "mam", "mess"), listOf(".zip", ".7z", ".chd"), "retroarch", "mame2003_plus", emptyList(), "mame"),
+            "fbneo" to SystemDefinition("fbneo", "FinalBurn Neo", listOf("fbneo", "fba", "fbn"), listOf(".zip", ".7z"), "retroarch", "fbneo", emptyList(), "fbneo"),
+            "cps1" to SystemDefinition("cps1", "Capcom CPS-1", listOf("cps1", "cps"), listOf(".zip"), "retroarch", "fbneo", emptyList(), "cps1"),
+            "cps2" to SystemDefinition("cps2", "Capcom CPS-2", listOf("cps2"), listOf(".zip"), "retroarch", "fbneo", emptyList(), "cps2"),
+            "cps3" to SystemDefinition("cps3", "Capcom CPS-3", listOf("cps3"), listOf(".zip"), "retroarch", "fbneo", emptyList(), "cps3"),
+            "model2" to SystemDefinition("model2", "Sega Model 2", listOf("model2"), listOf(".zip"), "retroarch", "mame", emptyList(), "model2"),
+            "daphne" to SystemDefinition("daphne", "Daphne", listOf("daphne", "singe"), listOf(".daphne", ".zip"), "retroarch", "daphne", emptyList(), "daphne"),
+
+            // ---------- Commodore / Amiga ----------
+            "c64" to SystemDefinition("c64", "Commodore 64", listOf("c64", "commodore64"), listOf(".d64", ".t64", ".prg", ".crt", ".tap", ".g64"), "retroarch", "vice_x64", emptyList(), "c64"),
+            "c128" to SystemDefinition("c128", "Commodore 128", listOf("c128"), listOf(".d64", ".t64", ".prg", ".crt"), "retroarch", "vice_x128", emptyList(), "c128"),
+            "vic20" to SystemDefinition("vic20", "VIC-20", listOf("vic20"), listOf(".d64", ".t64", ".prg", ".crt"), "retroarch", "vice_xvic", emptyList(), "vic20"),
+            "cplus4" to SystemDefinition("cplus4", "Commodore Plus/4", listOf("cplus4", "c16", "c20", "plus4"), listOf(".d64", ".t64", ".prg"), "retroarch", "vice_xplus4", emptyList(), "cplus4"),
+            "pet" to SystemDefinition("pet", "Commodore PET", listOf("pet"), listOf(".d64", ".t64", ".prg"), "retroarch", "vice_xpet", emptyList(), "pet"),
+            "amiga" to SystemDefinition("amiga", "Amiga", listOf("amiga", "amiga500", "amiga600", "amiga1200", "amigacd32", "cd32", "amigacdtv", "cdtv"), listOf(".adf", ".adz", ".dms", ".ipf", ".hdf", ".lha", ".uae", ".slave"), "retroarch", "puae", emptyList(), "amiga"),
+
+            // ---------- Amstrad / Sinclair ----------
+            "amstradcpc" to SystemDefinition("amstradcpc", "Amstrad CPC", listOf("amstradcpc", "cpc"), listOf(".dsk", ".cdt", ".sna", ".tap", ".cpr"), "retroarch", "cap32", emptyList(), "amstradcpc"),
+            "amstradgx4000" to SystemDefinition("amstradgx4000", "Amstrad GX4000", listOf("amstradgx4000", "gx4000"), listOf(".cpr"), "retroarch", "cap32", emptyList(), "amstradgx4000"),
+            "zxspectrum" to SystemDefinition("zxspectrum", "ZX Spectrum", listOf("zxspectrum", "spectrum", "zx"), listOf(".tap", ".tzx", ".z80", ".sna", ".dsk", ".scl", ".trd"), "retroarch", "fuse", emptyList(), "zxspectrum"),
+            "zx81" to SystemDefinition("zx81", "ZX81", listOf("zx81"), listOf(".p", ".81", ".tzx"), "retroarch", "81", emptyList(), "zx81"),
+
+            // ---------- MSX ----------
+            "msx" to SystemDefinition("msx", "MSX", listOf("msx", "msx1"), listOf(".rom", ".mx1", ".mx2", ".dsk", ".cas"), "retroarch", "bluemsx", emptyList(), "msx"),
+            "msx2" to SystemDefinition("msx2", "MSX2", listOf("msx2", "msx2+", "msxturbor"), listOf(".rom", ".mx2", ".dsk", ".cas"), "retroarch", "bluemsx", emptyList(), "msx2"),
+
+            // ---------- Apple / BBC / Acorn ----------
+            "apple2" to SystemDefinition("apple2", "Apple II", listOf("apple2"), listOf(".dsk", ".woz", ".po", ".nib", ".do", ".hdv", ".2mg"), "retroarch", "mame2003_plus", emptyList(), "apple2"),
+            "apple2gs" to SystemDefinition("apple2gs", "Apple IIGS", listOf("apple2gs"), listOf(".2mg", ".po", ".hdv"), "retroarch", "mame", emptyList(), "apple2gs"),
+            "archimedes" to SystemDefinition("archimedes", "Acorn Archimedes", listOf("archimedes", "acorn"), listOf(".adf", ".hdf", ".apd"), "retroarch", "mame", emptyList(), "archimedes"),
+            "bbcmicro" to SystemDefinition("bbcmicro", "BBC Micro", listOf("bbc", "bbcmicro"), listOf(".ssd", ".dsd", ".uef", ".img"), "retroarch", "mame", emptyList(), "bbcmicro"),
+            "electron" to SystemDefinition("electron", "Acorn Electron", listOf("electron"), listOf(".uef", ".ssd", ".dsd"), "retroarch", "mame", emptyList(), "electron"),
+
+            // ---------- Japanese PCs ----------
+            "pc88" to SystemDefinition("pc88", "NEC PC-8801", listOf("pc88", "pc-88"), listOf(".d88", ".88d", ".cmt", ".t88"), "retroarch", "quasi88", emptyList(), "pc88"),
+            "pc98" to SystemDefinition("pc98", "NEC PC-9801", listOf("pc98", "pc-98"), listOf(".d98", ".hdi", ".fdi", ".98d"), "retroarch", "np2kai", emptyList(), "pc98"),
+            "x1" to SystemDefinition("x1", "Sharp X1", listOf("x1"), listOf(".d88", ".dx1", ".2d", ".tap"), "retroarch", "x1", emptyList(), "x1"),
+            "x68000" to SystemDefinition("x68000", "Sharp X68000", listOf("x68000"), listOf(".dim", ".img", ".d88", ".88d", ".hdm", ".xdf"), "retroarch", "px68k", emptyList(), "x68000"),
+            "fm7" to SystemDefinition("fm7", "Fujitsu FM-7", listOf("fm7"), listOf(".d77", ".d88", ".t77"), "retroarch", "mame", emptyList(), "fm7"),
+            "fmtowns" to SystemDefinition("fmtowns", "FM Towns", listOf("fmtowns", "fmtownsux"), listOf(".iso", ".bin", ".cue"), "retroarch", "mame", emptyList(), "fmtowns"),
+
+            // ---------- DOS / PC ----------
+            "dos" to SystemDefinition("dos", "DOS", listOf("dos", "pc", "windows"), listOf(".conf", ".exe", ".bat", ".com", ".zip", ".7z"), "retroarch", "dosbox_pure", emptyList(), "dos"),
+            "scummvm" to SystemDefinition("scummvm", "ScummVM", listOf("scummvm"), listOf(".svm", ".scummvm", ".zip"), "retroarch", "scummvm", emptyList(), "scummvm"),
+
+            // ---------- Misc consoles / handhelds ----------
             "colecovision" to SystemDefinition("colecovision", "ColecoVision", listOf("colecovision", "coleco"), listOf(".col", ".bin", ".rom"), "retroarch", "bluemsx", emptyList(), "colecovision"),
             "intellivision" to SystemDefinition("intellivision", "Intellivision", listOf("intellivision", "intv"), listOf(".int", ".bin", ".rom"), "retroarch", "freeintv", listOf("exec.bin", "grom.bin"), "intellivision"),
             "3do" to SystemDefinition("3do", "3DO", listOf("3do", "3do interactive"), listOf(".iso", ".bin", ".cue", ".chd"), "retroarch", "opera", listOf("panafz10.bin"), "3do"),
-            "vectrex" to SystemDefinition("vectrex", "Vectrex", listOf("vectrex"), listOf(".vec", ".bin"), "retroarch", "vecx", emptyList(), "vectrex")
+            "vectrex" to SystemDefinition("vectrex", "Vectrex", listOf("vectrex"), listOf(".vec", ".bin"), "retroarch", "vecx", emptyList(), "vectrex"),
+            "odyssey2" to SystemDefinition("odyssey2", "Magnavox Odyssey²", listOf("odyssey2", "videopac", "videopacplus", "o2em"), listOf(".bin", ".rom"), "retroarch", "o2em", listOf("o2rom.bin"), "odyssey2"),
+            "channelf" to SystemDefinition("channelf", "Fairchild Channel F", listOf("channelf"), listOf(".bin", ".rom"), "retroarch", "freechaf", emptyList(), "channelf"),
+            "supervision" to SystemDefinition("supervision", "Watara Supervision", listOf("supervision", "watara"), listOf(".sv", ".bin"), "retroarch", "potator", emptyList(), "supervision"),
+            "gamecom" to SystemDefinition("gamecom", "Tiger Game.com", listOf("gamecom"), listOf(".tgc", ".bin"), "retroarch", "mame", emptyList(), "gamecom"),
+            "megaduck" to SystemDefinition("megaduck", "Mega Duck", listOf("megaduck"), listOf(".bin"), "retroarch", "sameduck", emptyList(), "megaduck"),
+            "gamate" to SystemDefinition("gamate", "Gamate", listOf("gamate"), listOf(".bin"), "retroarch", "mame", emptyList(), "gamate"),
+            "gamepock" to SystemDefinition("gamepock", "Epoch Game Pocket", listOf("gamepock"), listOf(".bin"), "retroarch", "mame", emptyList(), "gamepock"),
+            "cdi" to SystemDefinition("cdi", "Philips CD-i", listOf("cdi", "cdimono1"), listOf(".chd", ".iso", ".cue", ".bin"), "retroarch", "same_cdi", emptyList(), "cdi"),
+            "supracan" to SystemDefinition("supracan", "Super A'Can", listOf("supracan"), listOf(".bin"), "retroarch", "mame", emptyList(), "supracan"),
+            "mac" to SystemDefinition("mac", "Macintosh", listOf("mac", "macintosh", "vmac"), listOf(".dsk", ".img", ".hdv", ".iso"), "retroarch", "minivmac", emptyList(), "mac"),
+            "palm" to SystemDefinition("palm", "Palm OS", listOf("palm"), listOf(".prc", ".pdb", ".zip", ".img"), "retroarch", "mu", emptyList(), "palm"),
+            "ti99" to SystemDefinition("ti99", "TI-99/4A", listOf("ti99"), listOf(".ctg", ".bin", ".rpk"), "retroarch", "ti99", emptyList(), "ti99"),
+            "oric" to SystemDefinition("oric", "Tangerine Oric", listOf("oric", "tanodragon"), listOf(".dsk", ".tap"), "retroarch", "mame", emptyList(), "oric"),
+            "thomson" to SystemDefinition("thomson", "Thomson", listOf("thomson", "to8", "mo5"), listOf(".fd", ".k7", ".m7", ".rom"), "retroarch", "theodore", emptyList(), "thomson"),
+            "samcoupe" to SystemDefinition("samcoupe", "Sam Coupé", listOf("samcoupe"), listOf(".dsk", ".mgt"), "retroarch", "simcoupe", emptyList(), "samcoupe"),
+            "trs80" to SystemDefinition("trs80", "TRS-80", listOf("trs-80", "trs80", "coco", "coco3"), listOf(".ccc", ".dsk", ".cas"), "retroarch", "mame", emptyList(), "trs80"),
+
+            // ---------- Fantasy consoles ----------
+            "pico8" to SystemDefinition("pico8", "PICO-8", listOf("pico-8", "pico8"), listOf(".p8", ".png"), "retroarch", "fake08", emptyList(), "pico8"),
+            "tic80" to SystemDefinition("tic80", "TIC-80", listOf("tic-80", "tic80"), listOf(".tic"), "retroarch", "tic80", emptyList(), "tic80"),
+            "wasm4" to SystemDefinition("wasm4", "WASM-4", listOf("wasm4"), listOf(".wasm"), "retroarch", "wasm4", emptyList(), "wasm4"),
+            "vircon32" to SystemDefinition("vircon32", "Vircon32", listOf("vircon32"), listOf(".v32"), "retroarch", "vircon32", emptyList(), "vircon32"),
+            "chip8" to SystemDefinition("chip8", "CHIP-8", listOf("chip-8", "chip8"), listOf(".ch8", ".sch", ".xo8"), "retroarch", "chip8", emptyList(), "chip8"),
+
+            // ---------- Other ----------
+            "arduboy" to SystemDefinition("arduboy", "Arduboy", listOf("arduboy"), listOf(".hex", ".arduboy"), "retroarch", "arduous", emptyList(), "arduboy"),
+            "uzebox" to SystemDefinition("uzebox", "Uzebox", listOf("uzebox"), listOf(".uze"), "retroarch", "uzem", emptyList(), "uzebox"),
+            "vmu" to SystemDefinition("vmu", "Dreamcast VMU", listOf("vmu"), listOf(".vms", ".bin"), "retroarch", "vemulator", emptyList(), "vmu"),
+            "scv" to SystemDefinition("scv", "Super Cassette Vision", listOf("scv"), listOf(".bin", ".0"), "retroarch", "mame", emptyList(), "scv"),
+            "advision" to SystemDefinition("advision", "Entex Adventure Vision", listOf("advision"), listOf(".bin"), "retroarch", "mame", emptyList(), "advision"),
+            "crvision" to SystemDefinition("crvision", "CreatiVision", listOf("crvision"), listOf(".bin", ".rom"), "retroarch", "mame", emptyList(), "crvision"),
+            "vc4000" to SystemDefinition("vc4000", "Interton VC 4000", listOf("vc4000"), listOf(".bin"), "retroarch", "mame", emptyList(), "vc4000"),
+            "pv1000" to SystemDefinition("pv1000", "Casio PV-1000", listOf("pv1000"), listOf(".bin"), "retroarch", "mame", emptyList(), "pv1000"),
+            "apfm1000" to SystemDefinition("apfm1000", "APF MP-1000", listOf("apfm1000", "apf"), listOf(".bin"), "retroarch", "mame", emptyList(), "apfm1000"),
+            "arcadia" to SystemDefinition("arcadia", "Emerson Arcadia 2001", listOf("arcadia"), listOf(".bin"), "retroarch", "mame", emptyList(), "arcadia"),
+            "astrocade" to SystemDefinition("astrocade", "Bally Astrocade", listOf("astrocde", "astrocade"), listOf(".bin"), "retroarch", "mame", emptyList(), "astrocade"),
+            "gametank" to SystemDefinition("gametank", "Game Tank", listOf("gametank"), listOf(".gtr"), "retroarch", "gametank", emptyList(), "gametank"),
+            "gp32" to SystemDefinition("gp32", "GamePark GP32", listOf("gp32"), listOf(".smc"), "retroarch", "mame", emptyList(), "gp32"),
+            "vsmile" to SystemDefinition("vsmile", "VTech V.Smile", listOf("vsmile"), listOf(".zip", ".bin"), "retroarch", "mame", emptyList(), "vsmile"),
+            "socrates" to SystemDefinition("socrates", "VTech Socrates", listOf("socrates"), listOf(".bin"), "retroarch", "mame", emptyList(), "socrates"),
+            "gmaster" to SystemDefinition("gmaster", "Hartung Game Master", listOf("gmaster"), listOf(".bin"), "retroarch", "mame", emptyList(), "gmaster"),
+            "multivision" to SystemDefinition("multivision", "Tsukuda Multivision", listOf("multivision"), listOf(".bin"), "retroarch", "mame", emptyList(), "multivision"),
+            "j2me" to SystemDefinition("j2me", "Java ME", listOf("j2me", "freej2me", "java"), listOf(".jar"), "retroarch", "freej2me", emptyList(), "j2me"),
+            "openbor" to SystemDefinition("openbor", "OpenBOR", listOf("openbor"), listOf(".pak"), "retroarch", "openbor", emptyList(), "openbor")
         )
     }
 
