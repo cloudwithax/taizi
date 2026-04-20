@@ -13,6 +13,7 @@ import com.taizi.data.local.BoxArtDao
 import com.taizi.data.local.BoxArtEntry
 import com.taizi.data.local.LocalDataSource
 import com.taizi.data.scraper.IGDBService
+import com.taizi.data.scraper.ScrapedGame
 import com.taizi.data.scraper.ScraperCredentials
 import com.taizi.domain.model.*
 import com.taizi.domain.repository.LibraryRepository
@@ -711,51 +712,70 @@ class LibraryRepositoryImpl(
             val library = _library.value
             val games = library.gamesBySystem[systemId] ?: return@withContext Result.success(0)
             var scraped = 0
+            val downloadSemaphore = Semaphore(4)
 
-            games.forEachIndexed { index, game ->
-                if (game.boxArtPath != null) {
-                    onProgress?.invoke(game.name, index + 1, games.size)
-                    return@forEachIndexed
+            val chunks = games.chunked(4)
+            var processed = 0
+
+            for (chunk in chunks) {
+                data class ScrapeResult(val game: Game, val info: ScrapedGame)
+                val results = mutableListOf<ScrapeResult>()
+
+                for (game in chunk) {
+                    processed++
+                    onProgress?.invoke(game.name, processed, games.size)
+                    if (game.boxArtPath != null) continue
+
+                    val romFileName = File(game.path).name
+                    val info = scraperService.scrapeGame(romFileName, systemId) ?: continue
+                    if (info.boxArtUrl == null) continue
+
+                    results.add(ScrapeResult(game, info))
+                    delay(250)
                 }
-                val romFileName = File(game.path).name
-                val info = scraperService.scrapeGame(romFileName, systemId)
-                    ?: return@forEachIndexed
 
-                onProgress?.invoke(game.name, index + 1, games.size)
+                coroutineScope {
+                    results.map { (game, info) ->
+                        async {
+                            downloadSemaphore.acquire()
+                            try {
+                                val localPath = scraperService.downloadBoxArt(
+                                    info.boxArtUrl!!, systemId, game.name
+                                ) ?: return@async
 
-                val artUrl = info.boxArtUrl ?: return@forEachIndexed
-                val localPath = scraperService.downloadBoxArt(artUrl, systemId, game.name)
-                    ?: return@forEachIndexed
-
-                val updatedGame = game.copy(
-                    boxArtPath = localPath,
-                    metadata = GameMetadata(
-                        description = info.description,
-                        genre = info.genre,
-                        developer = info.developer,
-                        publisher = info.publisher,
-                        releaseDate = info.releaseDate,
-                        players = info.players,
-                        rating = info.rating
-                    )
-                )
-                updateGameInLibrary(systemId, updatedGame)
-                boxArtDao.upsert(BoxArtEntry(
-                    romPath = game.path,
-                    systemId = systemId,
-                    gameName = game.name,
-                    artPath = localPath,
-                    description = info.description,
-                    genre = info.genre,
-                    developer = info.developer,
-                    publisher = info.publisher,
-                    releaseDate = info.releaseDate,
-                    players = info.players,
-                    rating = info.rating
-                ))
-                scraped++
-
-                delay(300)
+                                val updatedGame = game.copy(
+                                    boxArtPath = localPath,
+                                    metadata = GameMetadata(
+                                        description = info.description,
+                                        genre = info.genre,
+                                        developer = info.developer,
+                                        publisher = info.publisher,
+                                        releaseDate = info.releaseDate,
+                                        players = info.players,
+                                        rating = info.rating
+                                    )
+                                )
+                                updateGameInLibrary(systemId, updatedGame)
+                                boxArtDao.upsert(BoxArtEntry(
+                                    romPath = game.path,
+                                    systemId = systemId,
+                                    gameName = game.name,
+                                    artPath = localPath,
+                                    description = info.description,
+                                    genre = info.genre,
+                                    developer = info.developer,
+                                    publisher = info.publisher,
+                                    releaseDate = info.releaseDate,
+                                    players = info.players,
+                                    rating = info.rating
+                                ))
+                                scraped++
+                            } finally {
+                                downloadSemaphore.release()
+                            }
+                        }
+                    }.awaitAll()
+                }
             }
 
             localDataSource.saveLibraryCache(_library.value)
@@ -774,51 +794,80 @@ class LibraryRepositoryImpl(
                 games.map { sysId to it }
             }
             var scraped = 0
+            val downloadSemaphore = Semaphore(4)
 
-            allGames.forEachIndexed { index, (systemId, game) ->
-                val system = library.systems.find { it.id == systemId }
-                val systemName = system?.name ?: systemId
-                onProgress?.invoke(game.name, systemName, index + 1, allGames.size)
+            // Process in chunks: lookup API sequentially (rate limited), download images in parallel
+            val chunks = allGames.chunked(4)
+            var processed = 0
 
-                if (game.boxArtPath != null) return@forEachIndexed
-
-                val romFileName = File(game.path).name
-                val info = scraperService.scrapeGame(romFileName, systemId)
-                    ?: return@forEachIndexed
-
-                val artUrl = info.boxArtUrl ?: return@forEachIndexed
-                val localPath = scraperService.downloadBoxArt(artUrl, systemId, game.name)
-                    ?: return@forEachIndexed
-
-                val updatedGame = game.copy(
-                    boxArtPath = localPath,
-                    metadata = GameMetadata(
-                        description = info.description,
-                        genre = info.genre,
-                        developer = info.developer,
-                        publisher = info.publisher,
-                        releaseDate = info.releaseDate,
-                        players = info.players,
-                        rating = info.rating
-                    )
+            for (chunk in chunks) {
+                // Phase 1: API lookups (sequential, 250ms apart)
+                data class ScrapeResult(
+                    val systemId: String,
+                    val game: Game,
+                    val info: ScrapedGame
                 )
-                updateGameInLibrary(systemId, updatedGame)
-                boxArtDao.upsert(BoxArtEntry(
-                    romPath = game.path,
-                    systemId = systemId,
-                    gameName = game.name,
-                    artPath = localPath,
-                    description = info.description,
-                    genre = info.genre,
-                    developer = info.developer,
-                    publisher = info.publisher,
-                    releaseDate = info.releaseDate,
-                    players = info.players,
-                    rating = info.rating
-                ))
-                scraped++
+                val results = mutableListOf<ScrapeResult>()
 
-                delay(300)
+                for ((systemId, game) in chunk) {
+                    processed++
+                    val system = library.systems.find { it.id == systemId }
+                    val systemName = system?.name ?: systemId
+                    onProgress?.invoke(game.name, systemName, processed, allGames.size)
+
+                    if (game.boxArtPath != null) continue
+
+                    val romFileName = File(game.path).name
+                    val info = scraperService.scrapeGame(romFileName, systemId) ?: continue
+                    if (info.boxArtUrl == null) continue
+
+                    results.add(ScrapeResult(systemId, game, info))
+                    delay(250)
+                }
+
+                // Phase 2: Download images in parallel (CDN, no rate limit)
+                coroutineScope {
+                    results.map { (systemId, game, info) ->
+                        async {
+                            downloadSemaphore.acquire()
+                            try {
+                                val localPath = scraperService.downloadBoxArt(
+                                    info.boxArtUrl!!, systemId, game.name
+                                ) ?: return@async
+
+                                val updatedGame = game.copy(
+                                    boxArtPath = localPath,
+                                    metadata = GameMetadata(
+                                        description = info.description,
+                                        genre = info.genre,
+                                        developer = info.developer,
+                                        publisher = info.publisher,
+                                        releaseDate = info.releaseDate,
+                                        players = info.players,
+                                        rating = info.rating
+                                    )
+                                )
+                                updateGameInLibrary(systemId, updatedGame)
+                                boxArtDao.upsert(BoxArtEntry(
+                                    romPath = game.path,
+                                    systemId = systemId,
+                                    gameName = game.name,
+                                    artPath = localPath,
+                                    description = info.description,
+                                    genre = info.genre,
+                                    developer = info.developer,
+                                    publisher = info.publisher,
+                                    releaseDate = info.releaseDate,
+                                    players = info.players,
+                                    rating = info.rating
+                                ))
+                                scraped++
+                            } finally {
+                                downloadSemaphore.release()
+                            }
+                        }
+                    }.awaitAll()
+                }
             }
 
             localDataSource.saveLibraryCache(_library.value)
