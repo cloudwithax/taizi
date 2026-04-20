@@ -8,6 +8,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +40,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,7 +51,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -55,6 +65,7 @@ import com.taizi.domain.model.System
 import com.taizi.ui.theme.SystemAccent
 import com.taizi.ui.theme.accentFor
 import com.taizi.ui.theme.imageFor
+import kotlinx.coroutines.launch
 
 @Composable
 fun SystemListScreen(
@@ -110,7 +121,8 @@ fun SystemListScreen(
             PagerDots(
                 count = systems.size,
                 current = pagerState.currentPage,
-                activeColor = focusedAccent.primary
+                activeColor = focusedAccent.primary,
+                pagerState = pagerState
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -341,7 +353,12 @@ private fun BiosChip() {
 }
 
 @Composable
-private fun PagerDots(count: Int, current: Int, activeColor: Color) {
+private fun PagerDots(
+    count: Int,
+    current: Int,
+    activeColor: Color,
+    pagerState: PagerState
+) {
     if (count <= 0) return
     val dotSize = 6.dp
     val activeWidth = 18.dp
@@ -362,14 +379,61 @@ private fun PagerDots(count: Int, current: Int, activeColor: Color) {
     )
 
     val windowWidth = step * windowSize + (activeWidth - dotSize)
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val scrubPxPerPage = with(density) { 28.dp.toPx() }
+    var scrubbing by remember { mutableStateOf(false) }
+
+    val scrubScale by animateFloatAsState(
+        targetValue = if (scrubbing) 1.8f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "scrubScale"
+    )
 
     Box(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(count) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+                    scrubbing = true
+                    val originPage = pagerState.currentPage
+                    val startX = longPress.position.x
+                    var lastPage = originPage
+
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            if (!change.pressed) break
+                            change.consume()
+
+                            val dx = change.position.x - startX
+                            val delta = (dx / scrubPxPerPage).toInt()
+                            val target = (originPage + delta).coerceIn(0, count - 1)
+                            if (target != lastPage) {
+                                lastPage = target
+                                scope.launch { pagerState.scrollToPage(target) }
+                            }
+                        }
+                    } finally {
+                        scrubbing = false
+                    }
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
                 .width(windowWidth)
+                .graphicsLayer {
+                    scaleX = scrubScale
+                    scaleY = scrubScale
+                }
                 .clipToBounds()
         ) {
             Row(
