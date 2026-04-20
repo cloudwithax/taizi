@@ -145,6 +145,9 @@ dependencies {
     // HTTP Client
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
+    // Archive central-directory reads for ROM validation
+    implementation("com.squareup.okio:okio:3.9.0")
+
     // Room (box art database)
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")

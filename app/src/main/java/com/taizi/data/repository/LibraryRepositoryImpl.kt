@@ -30,6 +30,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
+import okio.FileSystem
+import okio.Path.Companion.toOkioPath
+import okio.Path.Companion.toPath
+import okio.openZip
 import java.io.File
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -245,7 +249,30 @@ class LibraryRepositoryImpl(
         if (name.startsWith(".") || name.startsWith("_")) return false
         if (name.lowercase() in SKIP_FILES) return false
         val ext = ".${file.extension.lowercase()}"
-        return ext in validExtensions || ext in ARCHIVE_EXTENSIONS
+        if (ext in validExtensions) return true
+        if (ext !in ARCHIVE_EXTENSIONS) return false
+        // For .zip, peek central directory and verify an inner entry matches the
+        // system's native formats. For .7z/.rar we can't cheaply peek, so trust
+        // the folder.
+        return if (ext == ".zip") zipContainsRomFor(file, validExtensions)
+        else true
+    }
+
+    private fun zipContainsRomFor(file: File, validExtensions: Set<String>): Boolean {
+        return try {
+            val zipFs = FileSystem.SYSTEM.openZip(file.toOkioPath())
+            zipFs.listRecursively("/".toPath()).any { entry ->
+                val entryName = entry.name
+                if (entryName.startsWith(".") || entryName.startsWith("_")) return@any false
+                val dot = entryName.lastIndexOf('.')
+                if (dot < 0) return@any false
+                val entryExt = entryName.substring(dot).lowercase()
+                entryExt in validExtensions
+            }
+        } catch (_: Exception) {
+            // Corrupt or unreadable zip — don't surface it.
+            false
+        }
     }
 
     private fun countFilesWithExtension(
