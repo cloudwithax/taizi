@@ -2,15 +2,14 @@ package com.taizi.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,13 +32,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,7 +49,7 @@ import com.taizi.domain.model.BiosStatus
 import com.taizi.domain.model.System
 import com.taizi.ui.theme.SystemAccent
 import com.taizi.ui.theme.accentFor
-import kotlin.math.absoluteValue
+import com.taizi.ui.theme.imageFor
 
 @Composable
 fun SystemListScreen(
@@ -87,18 +87,15 @@ fun SystemListScreen(
 
             HorizontalPager(
                 state = pagerState,
-                contentPadding = PaddingValues(horizontal = 64.dp),
-                pageSpacing = 16.dp,
+                pageSpacing = 0.dp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(280.dp)
+                    .padding(horizontal = 20.dp)
             ) { page ->
-                val offset = ((pagerState.currentPage - page) +
-                        pagerState.currentPageOffsetFraction).absoluteValue
                 SystemTile(
                     system = systems[page],
                     accent = accentFor(systems[page].id),
-                    pageOffset = offset,
                     onClick = { onSystemClick(systems[page]) }
                 )
             }
@@ -204,21 +201,13 @@ private fun AccentGlow(accent: SystemAccent) {
 private fun SystemTile(
     system: System,
     accent: SystemAccent,
-    pageOffset: Float,
     onClick: () -> Unit
 ) {
-    val scale = 1f - (pageOffset.coerceIn(0f, 1f) * 0.18f)
-    val alpha = 1f - (pageOffset.coerceIn(0f, 1f) * 0.55f)
+    val imageRes = imageFor(system.id)
 
     Box(
         modifier = Modifier
-            .fillMaxHeight()
-            .aspectRatio(0.78f)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = alpha
-            }
+            .fillMaxSize()
             .clip(RoundedCornerShape(28.dp))
             .background(
                 Brush.linearGradient(
@@ -231,13 +220,37 @@ private fun SystemTile(
             )
             .clickable { onClick() }
     ) {
+        if (imageRes != null) {
+            Image(
+                painter = painterResource(id = imageRes),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.55f)
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp, top = 20.dp, bottom = 20.dp)
+                    .graphicsLayer { alpha = 0.95f }
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(Color(0xEE0B0B10), Color.Transparent),
+                        endX = 700f
+                    )
+                )
+        )
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color(0xCC0B0B10)),
-                        startY = 400f
+                        colors = listOf(Color.Transparent, Color(0xAA0B0B10)),
+                        startY = 220f
                     )
                 )
         )
@@ -245,7 +258,7 @@ private fun SystemTile(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(20.dp),
+                .padding(24.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -255,7 +268,7 @@ private fun SystemTile(
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.35f)
+                    color = Color.Black.copy(alpha = 0.45f)
                 ) {
                     Text(
                         text = accent.label,
@@ -272,7 +285,7 @@ private fun SystemTile(
                 }
             }
 
-            Column {
+            Column(modifier = Modifier.fillMaxWidth(0.55f)) {
                 Text(
                     text = system.name,
                     style = MaterialTheme.typography.headlineMedium.copy(
@@ -286,7 +299,7 @@ private fun SystemTile(
                 Text(
                     text = "${system.romCount} ${if (system.romCount == 1) "game" else "games"}",
                     style = MaterialTheme.typography.titleSmall,
-                    color = Color.White.copy(alpha = 0.8f)
+                    color = Color.White.copy(alpha = 0.85f)
                 )
             }
         }
