@@ -1,6 +1,9 @@
 package com.taizi.ui.screens
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -14,11 +17,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -33,11 +35,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -344,44 +346,58 @@ private fun PagerDots(count: Int, current: Int, activeColor: Color) {
     val dotSize = 6.dp
     val activeWidth = 18.dp
     val gap = 4.dp
+    val step = dotSize + gap
     val windowSize = minOf(count, 20)
     val anchor = (windowSize - 1) / 2
     val maxStart = (count - windowSize).coerceAtLeast(0)
     val windowStart = (current - anchor).coerceIn(0, maxStart)
-    val listState = rememberLazyListState()
 
-    LaunchedEffect(windowStart) {
-        listState.animateScrollToItem(windowStart)
-    }
+    val offset by animateDpAsState(
+        targetValue = -(step * windowStart),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "windowShift"
+    )
+
+    val windowWidth = step * windowSize + (activeWidth - dotSize)
 
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
-        LazyRow(
-            state = listState,
-            userScrollEnabled = false,
-            horizontalArrangement = Arrangement.spacedBy(gap),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.width(216.dp)
+        Box(
+            modifier = Modifier
+                .width(windowWidth)
+                .clipToBounds()
         ) {
-            items(count, key = { it }) { i ->
-                val isActive = i == current
-                val width by animateFloatAsState(
-                    targetValue = if (isActive) activeWidth.value else dotSize.value,
-                    animationSpec = tween(220),
-                    label = "dot"
-                )
-                Box(
-                    modifier = Modifier
-                        .height(dotSize)
-                        .width(width.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isActive) activeColor
-                            else MaterialTheme.colorScheme.outline
-                        )
-                )
+            Row(
+                modifier = Modifier.offset(x = offset),
+                horizontalArrangement = Arrangement.spacedBy(gap),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(count) { i ->
+                    val isActive = i == current
+                    val width by animateFloatAsState(
+                        targetValue = if (isActive) activeWidth.value else dotSize.value,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        label = "dot"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .height(dotSize)
+                            .width(width.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isActive) activeColor
+                                else MaterialTheme.colorScheme.outline
+                            )
+                    )
+                }
             }
         }
     }
