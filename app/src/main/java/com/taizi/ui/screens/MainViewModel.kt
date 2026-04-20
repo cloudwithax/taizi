@@ -1,11 +1,15 @@
 package com.taizi.ui.screens
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.taizi.data.scraper.BoxArtScrapeService
+import com.taizi.data.scraper.ScrapeStatus
 import com.taizi.domain.model.*
 import com.taizi.domain.model.LibraryChange
 import com.taizi.domain.repository.LibraryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +19,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class ScanProgress(
+    val gameName: String = "",
+    val systemName: String = "",
+    val count: Int = 0,
+    val total: Int = 0
+)
+
 sealed class MainUiState {
+    object Loading : MainUiState()
     object Initial : MainUiState()
     object Scanning : MainUiState()
     data class LibraryLoaded(val library: Library) : MainUiState()
@@ -24,29 +36,47 @@ sealed class MainUiState {
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    private val repository: LibraryRepository
+    private val repository: LibraryRepository,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Initial)
+    private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     private val _currentScreen = MutableStateFlow<Screen>(Screen.SystemList)
     val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
 
+    private val _selectedSystemPage = MutableStateFlow(0)
+    val selectedSystemPage: StateFlow<Int> = _selectedSystemPage.asStateFlow()
+
+    fun setSelectedSystemPage(page: Int) {
+        _selectedSystemPage.value = page
+    }
+
+    private val gameListScrollPositions = mutableMapOf<String, Int>()
+
+    fun getGameListScrollPosition(systemId: String): Int =
+        gameListScrollPositions[systemId] ?: 0
+
+    fun setGameListScrollPosition(systemId: String, index: Int) {
+        gameListScrollPositions[systemId] = index
+    }
+
+    private val _scanProgress = MutableStateFlow(ScanProgress())
+    val scanProgress: StateFlow<ScanProgress> = _scanProgress.asStateFlow()
+
     private var scanJob: Job? = null
     private var fileObserverJob: Job? = null
 
     init {
-        // Load cached library on init
         viewModelScope.launch {
             repository.loadCachedLibraryIfAvailable()
-        }
-
-        // Start file observer if we have a ROM root
-        viewModelScope.launch {
-            val currentLibrary = repository.getLibrary().value
-            if (currentLibrary.romRoot.isNotEmpty()) {
-                startFileObserver(currentLibrary.romRoot)
+            val cached = repository.getLibrary().value
+            if (cached.romRoot.isNotEmpty()) {
+                _uiState.value = MainUiState.LibraryLoaded(cached)
+                startFileObserver(cached.romRoot)
+            } else {
+                _uiState.value = MainUiState.Initial
             }
         }
     }
@@ -77,7 +107,10 @@ class MainViewModel @Inject constructor(
                 return@launch
             }
 
-            val result = repository.scanLibrary(root, force = true)
+            _scanProgress.value = ScanProgress()
+            val result = repository.scanLibrary(root, force = true) { gameName, systemName, count, total ->
+                _scanProgress.value = ScanProgress(gameName, systemName, count, total)
+            }
             result.fold(
                 onSuccess = { library ->
                     _uiState.value = MainUiState.LibraryLoaded(library)
@@ -105,9 +138,8 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             val result = repository.launchGame(game)
             if (result.isFailure) {
-                // TODO: Show error snackbar
                 val error = result.exceptionOrNull()
-                // _uiState.value = MainUiState.Error(error?.message ?: "Launch failed")
+                android.util.Log.e("Taizi", "Launch failed: ${error?.message}", error)
             }
         }
     }
@@ -126,6 +158,43 @@ class MainViewModel @Inject constructor(
         return repository.getLibrary().value.gamesBySystem[systemId] ?: emptyList()
     }
 
+    fun getAllGames(): List<Game> {
+        return repository.getLibrary().value.gamesBySystem.values.flatten()
+    }
+
+    val scrapeStatus: StateFlow<ScrapeStatus> = BoxArtScrapeService.status
+
+    fun scrapeAll() {
+        BoxArtScrapeService.start(appContext)
+        viewModelScope.launch {
+            scrapeStatus.collect { status ->
+                if (!status.isRunning && status.current > 0) {
+                    val lib = repository.getLibrary().value
+                    if (lib.romRoot.isNotEmpty()) {
+                        _uiState.value = MainUiState.LibraryLoaded(lib)
+                    }
+                }
+            }
+        }
+    }
+
+    fun cancelScrape() {
+        BoxArtScrapeService.stop(appContext)
+    }
+
+    fun setScraperCredentials(username: String, password: String) {
+        viewModelScope.launch {
+            repository.setScraperCredentials(username, password)
+        }
+    }
+
+    fun clearCache() {
+        viewModelScope.launch {
+            repository.clearCache()
+            _uiState.value = MainUiState.Initial
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         scanJob?.cancel()
@@ -141,6 +210,8 @@ sealed class Screen {
     object SystemList : Screen()
     data class GameList(val systemId: String) : Screen()
     object Settings : Screen()
+    object AppDrawer : Screen()
+    object Search : Screen()
     object SystemManager : Screen()
     object EmulatorManager : Screen()
     object Scraper : Screen()

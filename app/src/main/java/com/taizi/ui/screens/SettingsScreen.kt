@@ -1,21 +1,47 @@
 package com.taizi.ui.screens
 
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Environment
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons as MaterialIcons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.taizi.domain.repository.LibraryRepository
+
+private fun treeUriToFilePath(uri: Uri): String? {
+    val docId = uri.lastPathSegment ?: return null
+    val split = docId.split(":")
+    if (split.size < 2) return null
+    val volume = split[0]
+    val relativePath = split[1]
+    val root = if (volume == "primary") {
+        Environment.getExternalStorageDirectory().absolutePath
+    } else {
+        "/storage/$volume"
+    }
+    return "$root/$relativePath"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,8 +49,82 @@ fun SettingsScreen(
     viewModel: MainViewModel = hiltViewModel(),
     onNavigateUp: () -> Unit
 ) {
+    val context = LocalContext.current
     val library = viewModel.uiState.collectAsState().value
     val currentLibrary = (library as? MainUiState.LibraryLoaded)?.library
+
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let { treeUriToFilePath(it) }?.let { path ->
+            viewModel.triggerFullScan(path)
+            onNavigateUp()
+        }
+    }
+
+    var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showCredentialsDialog by remember { mutableStateOf(false) }
+    var ssUsername by remember { mutableStateOf("") }
+    var ssPassword by remember { mutableStateOf("") }
+    val scrapeStatus by viewModel.scrapeStatus.collectAsState()
+
+    if (showCredentialsDialog) {
+        AlertDialog(
+            onDismissRequest = { showCredentialsDialog = false },
+            title = { Text("Twitch API Credentials") },
+            text = {
+                Column {
+                    Text(
+                        "Register a free app at dev.twitch.tv to get a Client ID and Secret for IGDB box art scraping.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = ssUsername,
+                        onValueChange = { ssUsername = it },
+                        label = { Text("Client ID") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = ssPassword,
+                        onValueChange = { ssPassword = it },
+                        label = { Text("Client Secret") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCredentialsDialog = false
+                    viewModel.setScraperCredentials(ssUsername, ssPassword)
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCredentialsDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showClearCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheDialog = false },
+            title = { Text("Clear Cache") },
+            text = { Text("This will clear the library cache and force a full rescan on next launch.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearCacheDialog = false
+                    viewModel.clearCache()
+                }) { Text("Clear") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCacheDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -48,56 +148,51 @@ fun SettingsScreen(
             item {
                 SettingsSection(title = "Library") {
                     SettingsItem(
-                        title = "ROM Root",
+                        title = "ROM Folder",
                         subtitle = currentLibrary?.romRoot ?: "Not set",
                         icon = MaterialIcons.Filled.Folder,
-                        onClick = { /* TODO: Pick folder */ }
+                        onClick = { folderPickerLauncher.launch(null) }
                     )
                     SettingsItem(
                         title = "Rescan Library",
                         subtitle = "Force full rescan of ROM folders",
                         icon = MaterialIcons.Filled.Refresh,
-                        onClick = { viewModel.triggerFullScan() }
+                        onClick = {
+                            viewModel.triggerFullScan()
+                            onNavigateUp()
+                        }
                     )
-                }
-            }
-
-            item {
-                SettingsSection(title = "Emulators") {
                     SettingsItem(
-                        title = "Configure Emulators",
-                        subtitle = "Set up emulator for each system",
-                        icon = MaterialIcons.Filled.Settings,
-                        onClick = { /* TODO: Navigate to emulator manager */ }
-                    )
-                }
-            }
-
-            item {
-                SettingsSection(title = "Appearance") {
-                    val colors = MaterialTheme.colorScheme
-                    SettingsItem(
-                        title = "Theme",
-                        subtitle = "Dark (forced)",
-                        icon = MaterialIcons.Filled.Palette,
-                        onClick = { /* Theme picker */ }
+                        title = "Clear Cache",
+                        subtitle = "Remove cached library data",
+                        icon = MaterialIcons.Filled.Delete,
+                        onClick = { showClearCacheDialog = true }
                     )
                 }
             }
 
             item {
                 SettingsSection(title = "Scraping") {
+                    if (scrapeStatus.isRunning) {
+                        SettingsItem(
+                            title = "Scraping… ${scrapeStatus.current}/${scrapeStatus.total}",
+                            subtitle = "${scrapeStatus.gameName} · ${scrapeStatus.systemName}",
+                            icon = MaterialIcons.Filled.HourglassBottom,
+                            onClick = { viewModel.cancelScrape() }
+                        )
+                    } else {
+                        SettingsItem(
+                            title = "Scrape All Box Art",
+                            subtitle = "Download art from IGDB (runs in background)",
+                            icon = MaterialIcons.Filled.Image,
+                            onClick = { viewModel.scrapeAll() }
+                        )
+                    }
                     SettingsItem(
-                        title = "Enable Scraping",
-                        subtitle = "Download box art from Screenscraper.fr",
-                        icon = MaterialIcons.Filled.Image,
-                        onClick = { /* Toggle scraper */ }
-                    )
-                    SettingsItem(
-                        title = "Screenscraper Account",
-                        subtitle = "Configure account credentials",
+                        title = "Twitch API Credentials",
+                        subtitle = "Required for IGDB box art scraping",
                         icon = MaterialIcons.Filled.AccountCircle,
-                        onClick = { /* Configure account */ }
+                        onClick = { showCredentialsDialog = true }
                     )
                 }
             }
@@ -105,38 +200,62 @@ fun SettingsScreen(
             item {
                 SettingsSection(title = "System") {
                     SettingsItem(
-                        title = "Battery Optimization",
-                        subtitle = "Disable battery optimization for Taizi",
-                        icon = MaterialIcons.Filled.BatteryChargingFull,
-                        onClick = { /* Request ignore battery optimization */ }
-                    )
-                    SettingsItem(
                         title = "Set as Default Launcher",
                         subtitle = "Replace home screen with Taizi",
                         icon = MaterialIcons.Filled.Home,
-                        onClick = { /* Open launcher picker */ }
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_HOME_SETTINGS)
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(intent)
+                        }
+                    )
+                    SettingsItem(
+                        title = "Battery Optimization",
+                        subtitle = if (isIgnoringBatteryOptimizations(context)) "Disabled" else "Enabled · tap to disable",
+                        icon = MaterialIcons.Filled.BatteryChargingFull,
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
+                    SettingsItem(
+                        title = "App Info",
+                        subtitle = "Open system app settings",
+                        icon = MaterialIcons.Filled.Settings,
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        }
                     )
                 }
             }
 
             item {
+                val versionName = try {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                } catch (_: Exception) { "unknown" }
+
                 SettingsSection(title = "About") {
                     SettingsItem(
-                        title = "Version",
-                        subtitle = "1.0.0",
+                        title = "Taizi",
+                        subtitle = "Version $versionName",
                         icon = MaterialIcons.Filled.Info,
                         onClick = {}
-                    )
-                    SettingsItem(
-                        title = "Check for Updates",
-                        subtitle = "Check GitHub for new releases",
-                        icon = MaterialIcons.Filled.SystemUpdate,
-                        onClick = { /* Check updates */ }
                     )
                 }
             }
         }
     }
+}
+
+private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+    val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    return pm.isIgnoringBatteryOptimizations(context.packageName)
 }
 
 @Composable
@@ -148,7 +267,8 @@ fun SettingsSection(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -156,7 +276,7 @@ fun SettingsSection(
             Text(
                 text = title,
                 fontSize = 14.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
@@ -172,10 +292,18 @@ fun SettingsItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = tween(100),
+        label = "settingsItemPress"
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -204,10 +332,10 @@ fun SettingsItem(
             }
         }
 
-            Icon(
-                imageVector = MaterialIcons.Filled.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Icon(
+            imageVector = MaterialIcons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

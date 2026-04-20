@@ -1,22 +1,68 @@
 package com.taizi.ui.screens
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.*
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons as MaterialIcons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -27,12 +73,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.taizi.domain.model.Game
-import com.taizi.ui.theme.DarkColorPalette
-import kotlinx.coroutines.launch
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.material3.ExperimentalMaterial3Api
+import com.taizi.ui.theme.accentFor
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GameListScreen(
     systemId: String,
@@ -42,260 +85,98 @@ fun GameListScreen(
 ) {
     val system = viewModel.getSystemById(systemId)
     val games = viewModel.getGamesForSystem(systemId)
+    val accent = accentFor(systemId)
+
     var searchQuery by remember { mutableStateOf("") }
+    var searchOpen by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
 
     val filteredGames = remember(games, searchQuery, showFavoritesOnly) {
         games.filter { game ->
-            val matchesSearch = game.name.contains(searchQuery, ignoreCase = true)
+            val matchesSearch = searchQuery.isBlank() ||
+                    game.name.contains(searchQuery, ignoreCase = true)
             val matchesFavorite = if (showFavoritesOnly) game.favorite else true
             matchesSearch && matchesFavorite
         }
     }
 
-    val gridState = rememberLazyGridState()
-    val scope = rememberCoroutineScope()
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Top App Bar
-        TopAppBar(
-            title = {
-                Text(
-                    text = system?.name ?: "Games",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(MaterialIcons.Filled.ArrowBack, contentDescription = "Back")
-                }
-            },
-            actions = {
-                // Search
-                IconButton(onClick = {
-                    // TODO: Implement search dialog
-                }) {
-                    Icon(MaterialIcons.Filled.Search, contentDescription = "Search")
-                }
-
-                // Filter favorites
-                IconButton(onClick = { showFavoritesOnly = !showFavoritesOnly }) {
-                    Icon(
-                        imageVector = if (showFavoritesOnly) MaterialIcons.Filled.Favorite else MaterialIcons.Outlined.FavoriteBorder,
-                        contentDescription = "Favorites",
-                        tint = if (showFavoritesOnly) Color.Red else MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                // More options
-                IconButton(onClick = {
-                    // TODO: Show bottom sheet with sort options
-                }) {
-                    Icon(MaterialIcons.Filled.MoreVert, contentDescription = "More")
-                }
-            }
-        )
-
-        // Search Bar (if enabled)
-        if (searchQuery.isNotEmpty()) {
-            SearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                onSearch = { /* Handle search */ },
-                active = true,
-                onActiveChange = { active ->
-                    if (!active) searchQuery = ""
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Suggestions
-            }
-        }
-
-        // Stats Row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "${filteredGames.size} games",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = MaterialIcons.Filled.Folder,
-                    contentDescription = null,
-                    modifier = Modifier.size(12.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = system?.path ?: "",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        // Games Grid
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 120.dp),
-            state = gridState,
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(8.dp)
-        ) {
-            items(filteredGames) { game ->
-                GameCard(
-                    game = game,
-                    onClick = { onGameClick(game) },
-                    onFavoriteClick = { viewModel.toggleFavorite(game.path, !game.favorite) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun GameCard(
-    game: Game,
-    onClick: () -> Unit,
-    onFavoriteClick: (Boolean) -> Unit
-) {
-    val context = LocalContext.current
-    var imageLoading by remember { mutableStateOf(true) }
-    var imageError by remember { mutableStateOf(false) }
-
-    // Try to load box art
-    val boxArtPath = game.boxArtPath
-    val painter = rememberAsyncImagePainter(
-        model = ImageRequest.Builder(context)
-            .data(boxArtPath ?: game.path) // Fallback to trying to load ROM as image
-            .crossfade(true)
-            .build()
+    val gridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = viewModel.getGameListScrollPosition(systemId)
     )
 
-    Card(
+    DisposableEffect(systemId) {
+        onDispose {
+            viewModel.setGameListScrollPosition(systemId, gridState.firstVisibleItemIndex)
+        }
+    }
+
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(0.75f)
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = DarkColorPalette.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Image area (2/3 height)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(2f)
-                    .clip(MaterialTheme.shapes.small)
-                    .background(Color(0xFF2A2A2A)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (painter.intrinsicSize.width > 0 && painter.intrinsicSize.height > 0) {
-                    androidx.compose.foundation.Image(
-                        painter = painter,
-                        contentDescription = game.name,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else if (imageLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(32.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                } else {
-                    Icon(
-                        imageVector = MaterialIcons.Filled.SportsEsports,
-                        contentDescription = game.name,
-                        modifier = Modifier.size(48.dp),
-                        tint = Color(0xFF6A6A6A)
-                    )
-                }
+        SystemBanner(
+            systemName = system?.name ?: "Games",
+            systemPath = system?.path ?: "",
+            visibleCount = filteredGames.size,
+            totalCount = games.size,
+            accentPrimary = accent.primary,
+            accentSecondary = accent.secondary,
+            showFavoritesOnly = showFavoritesOnly,
+            searchOpen = searchOpen,
+            onBack = onBack,
+            onToggleSearch = { searchOpen = !searchOpen; if (!searchOpen) searchQuery = "" },
+            onToggleFavorites = { showFavoritesOnly = !showFavoritesOnly }
+        )
 
-                // Multi-disc indicator
-                if (game.isMultiDisc) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp)
-                            .size(20.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "${game.discs.size}",
-                            fontSize = 8.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
+        if (searchOpen) {
+            Spacer(modifier = Modifier.height(12.dp))
+            SearchField(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                accent = accent.primary
+            )
+        }
+
+        if (filteredGames.isEmpty()) {
+            EmptyGames(hasQuery = searchQuery.isNotBlank() || showFavoritesOnly)
+            return@Column
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 128.dp),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
+        ) {
+            itemsIndexed(filteredGames, key = { index, game -> game.path }) { index, game ->
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(
+                        initialAlpha = 0f,
+                        animationSpec = tween(
+                            durationMillis = 300,
+                            delayMillis = (index * 100).coerceAtMost(1000)
                         )
-                    }
-                }
-
-                // Favorite indicator
-                if (game.favorite) {
-                    Icon(
-                        imageVector =                         MaterialIcons.Filled.Favorite,
-                        contentDescription = "Favorite",
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(4.dp)
-                            .size(16.dp),
-                        tint = Color.Red
+                    ) + slideInVertically(
+                        initialOffsetY = { 20 },
+                        animationSpec = tween(
+                            durationMillis = 300,
+                            delayMillis = (index * 100).coerceAtMost(1000)
+                        )
+                    ),
+                    exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(
+                        targetOffsetY = { -10 },
+                        animationSpec = tween(200)
                     )
-                }
-            }
-
-            // Title area (1/3 height)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = game.displayName,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Play count & last played
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "Played: ${game.playCount}",
-                        fontSize = 8.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    // Favorite button
-                    Icon(
-                        imageVector = if (game.favorite) MaterialIcons.Filled.Favorite else MaterialIcons.Outlined.FavoriteBorder,
-                        contentDescription = "Toggle favorite",
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clickable { onFavoriteClick(!game.favorite) },
-                        tint = if (game.favorite) Color.Red else Color.Gray
+                    GameCard(
+                        game = game,
+                        accent = accent.primary,
+                        onClick = { onGameClick(game) },
+                        onFavoriteClick = { viewModel.toggleFavorite(game.path, !game.favorite) }
                     )
                 }
             }
@@ -304,33 +185,346 @@ fun GameCard(
 }
 
 @Composable
-private fun SearchBar(
+private fun SystemBanner(
+    systemName: String,
+    systemPath: String,
+    visibleCount: Int,
+    totalCount: Int,
+    accentPrimary: Color,
+    accentSecondary: Color,
+    showFavoritesOnly: Boolean,
+    searchOpen: Boolean,
+    onBack: () -> Unit,
+    onToggleSearch: () -> Unit,
+    onToggleFavorites: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(accentSecondary, MaterialTheme.colorScheme.background)
+                )
+            )
+            .padding(horizontal = 12.dp, vertical = 12.dp)
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RoundIconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = systemName,
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.ExtraBold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (visibleCount == totalCount) "$totalCount games"
+                        else "$visibleCount of $totalCount",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontFeatureSettings = "tnum"
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                RoundIconButton(
+                    onClick = onToggleFavorites,
+                    highlightColor = if (showFavoritesOnly) accentPrimary else null
+                ) {
+                    Icon(
+                        imageVector = if (showFavoritesOnly) Icons.Filled.Favorite
+                        else Icons.Outlined.FavoriteBorder,
+                        contentDescription = "Favorites",
+                        tint = if (showFavoritesOnly) Color.White
+                        else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                RoundIconButton(
+                    onClick = onToggleSearch,
+                    highlightColor = if (searchOpen) accentPrimary else null
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = "Search",
+                        tint = if (searchOpen) Color.White
+                        else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            if (systemPath.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = systemPath,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoundIconButton(
+    onClick: () -> Unit,
+    highlightColor: Color? = null,
+    content: @Composable () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = tween(100),
+        label = "roundIconButtonPress"
+    )
+    Surface(
+        shape = CircleShape,
+        color = highlightColor ?: MaterialTheme.colorScheme.surface,
+        shadowElevation = 2.dp,
+        modifier = Modifier
+            .size(40.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+    ) {
+        IconButton(onClick = onClick) { content() }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchField(
     query: String,
     onQueryChange: (String) -> Unit,
-    onSearch: (String) -> Unit,
-    active: Boolean,
-    onActiveChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit = {}
+    accent: Color
 ) {
-    // Simplified search bar - could be expanded
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = modifier,
-        placeholder = { Text("Search games…") },
-        leadingIcon = { Icon(MaterialIcons.Filled.Search, contentDescription = null) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        placeholder = { Text("Search games") },
+        leadingIcon = {
+            Icon(Icons.Filled.Search, contentDescription = null)
+        },
         trailingIcon = {
             if (query.isNotEmpty()) {
                 IconButton(onClick = { onQueryChange("") }) {
-                        Icon(MaterialIcons.Filled.Clear, contentDescription = "Clear")
+                    Icon(Icons.Filled.Clear, contentDescription = "Clear")
                 }
             }
         },
         singleLine = true,
+        shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+            focusedBorderColor = accent,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+            cursorColor = accent
         )
     )
+}
+
+@Composable
+private fun GameCard(
+    game: Game,
+    accent: Color,
+    onClick: () -> Unit,
+    onFavoriteClick: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    val hasArt = game.boxArtPath != null
+    val painter = rememberAsyncImagePainter(
+        model = ImageRequest.Builder(context)
+            .data(game.boxArtPath)
+            .crossfade(true)
+            .size(coil.size.Size(256, 356))
+            .memoryCacheKey(game.path)
+            .build()
+    )
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = tween(100),
+        label = "cardPress"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale; scaleY = scale
+                shadowElevation = 3f
+                shape = RoundedCornerShape(14.dp)
+                clip = true
+            }
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.72f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surface)
+        ) {
+            if (hasArt) {
+                androidx.compose.foundation.Image(
+                    painter = painter,
+                    contentDescription = game.name,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(14.dp)
+                        ),
+                    contentScale = ContentScale.Crop
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.6f)
+                                ),
+                                startY = 300f
+                            )
+                        )
+                )
+            } else {
+                PlaceholderArt(title = game.displayName, accent = accent)
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (game.isMultiDisc) {
+                    Chip(text = "${game.discs.size} DISCS", background = accent)
+                } else {
+                    Spacer(modifier = Modifier.size(0.dp))
+                }
+                IconButton(
+                    onClick = { onFavoriteClick(!game.favorite) },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = if (game.favorite) Icons.Filled.Favorite
+                        else Icons.Outlined.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (game.favorite) accent else Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = game.displayName,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (game.playCount > 0) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Played ${game.playCount}×",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFeatureSettings = "tnum"
+                        ),
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Chip(text: String, background: Color) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = background
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            ),
+            color = Color.White
+        )
+    }
+}
+
+@Composable
+private fun PlaceholderArt(title: String, accent: Color) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(accent.copy(alpha = 0.55f), Color(0xFF0B0B10))
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = title.take(1).uppercase(),
+            fontSize = 56.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color.White.copy(alpha = 0.9f)
+        )
+    }
+}
+
+@Composable
+private fun EmptyGames(hasQuery: Boolean) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = if (hasQuery) "No matches" else "No games yet",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = if (hasQuery) "Try a different filter."
+            else "Drop ROMs into this system's folder and rescan.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }

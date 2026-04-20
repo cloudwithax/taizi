@@ -1,6 +1,8 @@
 package com.taizi.di
 
 import android.content.Context
+import com.taizi.data.local.BoxArtDao
+import com.taizi.data.local.BoxArtDatabase
 import com.taizi.data.local.LocalDataSource
 import com.taizi.data.repository.LibraryRepositoryImpl
 import com.taizi.domain.repository.LibraryRepository
@@ -23,10 +25,23 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideBoxArtDatabase(@ApplicationContext context: Context): BoxArtDatabase {
+        return BoxArtDatabase.getInstance(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBoxArtDao(database: BoxArtDatabase): BoxArtDao {
+        return database.boxArtDao()
+    }
+
+    @Provides
+    @Singleton
     fun provideLibraryRepository(
         @ApplicationContext context: Context,
-        localDataSource: LocalDataSource
+        localDataSource: LocalDataSource,
+        boxArtDao: BoxArtDao
     ): LibraryRepository {
-        return LibraryRepositoryImpl(context, localDataSource)
+        return LibraryRepositoryImpl(context, localDataSource, boxArtDao)
     }
 }

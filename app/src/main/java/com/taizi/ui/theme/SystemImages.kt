@@ -1,0 +1,51 @@
+package com.taizi.ui.theme
+
+import com.taizi.R
+
+private val ImageMap: Map<String, Int> = mapOf(
+    "gb"        to R.drawable.system_gb,
+    "gbc"       to R.drawable.system_gbc,
+    "gba"       to R.drawable.system_gba,
+    "nds"       to R.drawable.system_nds,
+    "nes"       to R.drawable.system_nes,
+    "snes"      to R.drawable.system_snes,
+    "n64"       to R.drawable.system_n64,
+    "psx"       to R.drawable.system_psx,
+    "ps1"       to R.drawable.system_psx,
+    "psp"       to R.drawable.system_psp,
+    "dreamcast" to R.drawable.system_dc,
+    "dc"        to R.drawable.system_dc,
+    "mame"      to R.drawable.system_mame,
+    "arcade"    to R.drawable.system_mame,
+    "pce"       to R.drawable.system_pce,
+    "tg16"      to R.drawable.system_pce,
+    "atari2600" to R.drawable.system_atari2600,
+    "genesis"   to R.drawable.system_genesis,
+    "md"        to R.drawable.system_genesis,
+    "megadrive" to R.drawable.system_genesis,
+    "sms"       to R.drawable.system_mastersystem,
+    "mastersystem" to R.drawable.system_mastersystem,
+    "gg"        to R.drawable.system_gamegear,
+    "gamegear"  to R.drawable.system_gamegear,
+    "saturn"    to R.drawable.system_saturn,
+    "segacd"    to R.drawable.system_segacd,
+    "neogeo"    to R.drawable.system_neogeo,
+    "ngpc"      to R.drawable.system_ngpc,
+    "ngp"       to R.drawable.system_ngpc,
+    "atari7800" to R.drawable.system_atari7800,
+    "lynx"      to R.drawable.system_lynx,
+    "jaguar"    to R.drawable.system_jaguar,
+    "virtualboy" to R.drawable.system_virtualboy,
+    "vb"        to R.drawable.system_virtualboy,
+    "wonderswan" to R.drawable.system_wonderswan,
+    "wsc"       to R.drawable.system_wonderswan,
+    "ws"        to R.drawable.system_wonderswan,
+    "colecovision" to R.drawable.system_colecovision,
+    "coleco"    to R.drawable.system_colecovision,
+    "intellivision" to R.drawable.system_intellivision,
+    "intv"      to R.drawable.system_intellivision,
+    "3do"       to R.drawable.system_3do,
+    "vectrex"   to R.drawable.system_vectrex
+)
+
+fun imageFor(systemId: String): Int? = ImageMap[systemId.lowercase().trim()]
