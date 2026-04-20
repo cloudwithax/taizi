@@ -3,8 +3,6 @@ package com.taizi.ui.screens
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -12,16 +10,7 @@ import androidx.compose.material.icons.Icons as MaterialIcons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -60,32 +49,11 @@ fun SystemListScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            itemsIndexed(systems) { index, system ->
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn(
-                        initialAlpha = 0f,
-                        animationSpec = tween(
-                            durationMillis = 300,
-                            delayMillis = (index * 100).coerceAtMost(800)
-                        )
-                    ) + slideInVertically(
-                        initialOffsetY = { 20 },
-                        animationSpec = tween(
-                            durationMillis = 300,
-                            delayMillis = (index * 100).coerceAtMost(800)
-                        )
-                    ),
-                    exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(
-                        targetOffsetY = { -10 },
-                        animationSpec = tween(200)
-                    )
-                ) {
-                    SystemCard(
-                        system = system,
-                        onClick = { onSystemClick(system) }
-                    )
-                }
+            items(count = systems.size) { index ->
+                SystemCard(
+                    system = systems[index],
+                    onClick = { onSystemClick(systems[index]) }
+                )
             }
         }
 
@@ -106,19 +74,11 @@ fun SystemCard(
     system: System,
     onClick: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = tween(100),
-        label = "systemCardPress"
-    )
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() },
+            .clickable { onClick() },
         colors = CardDefaults.cardColors(
             containerColor = DarkColorPalette.surfaceVariant
         ),
@@ -163,10 +123,7 @@ fun SystemCard(
             Text(
                 text = "${system.romCount} games",
                 fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFeatureSettings = "tnum"
-                )
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             // BIOS status indicator

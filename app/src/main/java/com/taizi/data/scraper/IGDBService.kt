@@ -1,9 +1,6 @@
 package com.taizi.data.scraper
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -11,11 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
-import java.net.InetAddress
 import java.net.URL
-import javax.net.ssl.HttpsURLConnection
-
-private const val TAG = "IGDBService"
 
 data class ScraperCredentials(
     val clientId: String,
@@ -55,33 +48,13 @@ class IGDBService(private val context: Context) {
             "dc" to 23,
             "mame" to 52,
             "pce" to 86,
-            "atari2600" to 59,
-            "genesis" to 29,
-            "sms" to 64,
-            "gamegear" to 35,
-            "saturn" to 32,
-            "segacd" to 78,
-            "neogeo" to 80,
-            "ngpc" to 119,
-            "atari7800" to 60,
-            "lynx" to 61,
-            "jaguar" to 62,
-            "virtualboy" to 87,
-            "wonderswan" to 57,
-            "colecovision" to 68,
-            "intellivision" to 67,
-            "3do" to 50,
-            "vectrex" to 70
+            "atari2600" to 59
         )
     }
 
     private val gson = Gson()
     private var cachedToken: String? = null
     private var tokenExpiry: Long = 0
-
-    private fun openConnection(url: URL): HttpURLConnection {
-        return url.openConnection() as HttpURLConnection
-    }
 
     private suspend fun getAccessToken(): String? = withContext(Dispatchers.IO) {
         if (cachedToken != null && java.lang.System.currentTimeMillis() < tokenExpiry) {
@@ -90,7 +63,7 @@ class IGDBService(private val context: Context) {
 
         try {
             val url = URL("$TOKEN_URL?client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET&grant_type=client_credentials")
-            val conn = openConnection(url)
+            val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Length", "0")
             conn.doOutput = true
@@ -98,7 +71,6 @@ class IGDBService(private val context: Context) {
             conn.readTimeout = 10_000
 
             if (conn.responseCode != 200) {
-                Log.e(TAG, "Token request failed: HTTP ${conn.responseCode}")
                 conn.disconnect()
                 return@withContext null
             }
@@ -112,26 +84,17 @@ class IGDBService(private val context: Context) {
 
             cachedToken = token
             tokenExpiry = java.lang.System.currentTimeMillis() + (expiresIn * 1000) - 60_000
-            Log.d(TAG, "Got access token, expires in ${expiresIn}s")
             token
-        } catch (e: Exception) {
-            Log.e(TAG, "Token request exception: ${e.javaClass.simpleName}: ${e.message}")
+        } catch (_: Exception) {
             null
         }
     }
 
-    private suspend fun igdbPost(
-        endpoint: String,
-        query: String
-    ): String? = withContext(Dispatchers.IO) {
-        val token = getAccessToken()
-        if (token == null) {
-            Log.e(TAG, "No access token available for $endpoint")
-            return@withContext null
-        }
+    private suspend fun igdbPost(endpoint: String, query: String): String? = withContext(Dispatchers.IO) {
+        val token = getAccessToken() ?: return@withContext null
         try {
             val url = URL("$IGDB_URL/$endpoint")
-            val conn = openConnection(url)
+            val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Client-ID", CLIENT_ID)
             conn.setRequestProperty("Authorization", "Bearer $token")
@@ -143,7 +106,6 @@ class IGDBService(private val context: Context) {
             conn.outputStream.use { it.write(query.toByteArray()) }
 
             if (conn.responseCode != 200) {
-                Log.e(TAG, "IGDB $endpoint failed: HTTP ${conn.responseCode}")
                 conn.disconnect()
                 return@withContext null
             }
@@ -151,8 +113,7 @@ class IGDBService(private val context: Context) {
             val body = conn.inputStream.bufferedReader().readText()
             conn.disconnect()
             body
-        } catch (e: Exception) {
-            Log.e(TAG, "IGDB $endpoint exception: ${e.javaClass.simpleName}: ${e.message}")
+        } catch (_: Exception) {
             null
         }
     }
@@ -167,23 +128,15 @@ class IGDBService(private val context: Context) {
             .trim()
     }
 
-    suspend fun scrapeGame(
-        romFileName: String,
-        systemId: String
-    ): ScrapedGame? = withContext(Dispatchers.IO) {
-        val platformId = PLATFORM_IDS[systemId]
-        if (platformId == null) {
-            Log.w(TAG, "No IGDB platform mapping for system: $systemId")
-            return@withContext null
-        }
+    suspend fun scrapeGame(romFileName: String, systemId: String): ScrapedGame? = withContext(Dispatchers.IO) {
+        val platformId = PLATFORM_IDS[systemId] ?: return@withContext null
         val gameName = cleanRomName(romFileName)
         if (gameName.isBlank()) return@withContext null
-        Log.d(TAG, "Scraping: '$gameName' (system=$systemId, platform=$platformId)")
 
         val escapedName = gameName.replace("\"", "\\\"")
         val query = """
             search "$escapedName";
-            fields name, cover, summary, genres.name,
+            fields name, cover.image_id, summary, genres.name,
                    involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
                    first_release_date, game_modes.name, total_rating;
             where platforms = ($platformId);
@@ -229,18 +182,10 @@ class IGDBService(private val context: Context) {
 
         val players = game.getAsJsonArray("game_modes")?.size()
 
-        val coverId = game.get("cover")?.asInt
-        var boxArtUrl: String? = null
-        if (coverId != null) {
-            val coverBody = igdbPost("covers", "fields image_id; where id = $coverId;")
-            if (coverBody != null) {
-                val covers = gson.fromJson(coverBody, JsonArray::class.java)
-                val imageId = covers?.firstOrNull()?.asJsonObject?.get("image_id")?.asString
-                if (imageId != null) {
-                    boxArtUrl = "https://images.igdb.com/igdb/image/upload/t_cover_big/$imageId.jpg"
-                }
-            }
-        }
+        val imageId = game.getAsJsonObject("cover")?.get("image_id")?.asString
+        val boxArtUrl = if (imageId != null) {
+            "https://images.igdb.com/igdb/image/upload/t_cover_big/$imageId.jpg"
+        } else null
 
         ScrapedGame(
             title = title,
@@ -269,11 +214,7 @@ class IGDBService(private val context: Context) {
         return dp[a.length][b.length]
     }
 
-    suspend fun downloadBoxArt(
-        imageUrl: String,
-        systemId: String,
-        gameName: String
-    ): String? = withContext(Dispatchers.IO) {
+    suspend fun downloadBoxArt(imageUrl: String, systemId: String, gameName: String): String? = withContext(Dispatchers.IO) {
         try {
             val dir = File(context.filesDir, "boxart/$systemId")
             dir.mkdirs()
@@ -281,14 +222,10 @@ class IGDBService(private val context: Context) {
             val safeName = gameName.replace(Regex("[^a-zA-Z0-9._-]"), "_").take(100)
             val file = File(dir, "$safeName.jpg")
 
-            if (file.exists()) {
-                Log.d(TAG, "Box art already exists: ${file.absolutePath}")
-                return@withContext file.absolutePath
-            }
+            if (file.exists()) return@withContext file.absolutePath
 
-            Log.d(TAG, "Downloading box art: $imageUrl -> ${file.absolutePath}")
             val url = URL(imageUrl)
-            val conn = openConnection(url)
+            val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 10_000
             conn.readTimeout = 30_000
 
@@ -304,10 +241,8 @@ class IGDBService(private val context: Context) {
             }
             conn.disconnect()
 
-            Log.d(TAG, "Box art saved: ${file.absolutePath}")
             file.absolutePath
-        } catch (e: Exception) {
-            Log.e(TAG, "Download box art exception: ${e.javaClass.simpleName}: ${e.message}")
+        } catch (_: Exception) {
             null
         }
     }

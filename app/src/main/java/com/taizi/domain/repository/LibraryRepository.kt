@@ -5,9 +5,6 @@ import com.taizi.domain.model.LibraryChange
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * Repository for managing the ROM library
- */
 interface LibraryRepository {
     fun getLibrary(): StateFlow<Library>
     suspend fun loadCachedLibraryIfAvailable()

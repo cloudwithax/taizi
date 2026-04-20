@@ -7,11 +7,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.taizi.domain.model.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
 import java.io.File
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "taizi_settings")
@@ -58,27 +56,22 @@ class LocalDataSource(private val context: Context) {
         return prefs[SCRAPER_ACCOUNT]
     }
 
-    suspend fun getScraperEnabled(): Boolean {
-        val prefs = context.dataStore.data.first()
-        return prefs[SCRAPER_ENABLED] ?: false
-    }
-
     // Library Cache as JSON
     private val gson = Gson()
 
-    suspend fun getLibraryCache(): Library? = withContext(Dispatchers.IO) {
-        val prefs = context.libraryCacheStore.data.first()
-        val json = prefs[LIBRARY_CACHE] ?: return@withContext null
-        try {
-            gson.fromJson(json, Library::class.java)
-        } catch (e: Exception) {
-            null
-        }
-    }
+     suspend fun getLibraryCache(): Library? {
+         val prefs = context.libraryCacheStore.data.first()
+         val json = prefs[LIBRARY_CACHE] ?: return null
+         return try {
+             gson.fromJson(json, Library::class.java)
+         } catch (e: Exception) {
+             null
+         }
+     }
 
-    suspend fun saveLibraryCache(library: Library) = withContext(Dispatchers.IO) {
-        val json = gson.toJson(library)
+    suspend fun saveLibraryCache(library: Library) {
         context.libraryCacheStore.edit { prefs ->
+            val json = gson.toJson(library)
             prefs[LIBRARY_CACHE] = json
         }
     }

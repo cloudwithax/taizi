@@ -15,7 +15,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -93,9 +92,6 @@ class MainViewModel @Inject constructor(
         _currentScreen.value = Screen.SystemList
     }
 
-    /**
-     * Trigger a full library scan
-     */
     fun triggerFullScan(romRoot: String? = null) {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
@@ -126,9 +122,8 @@ class MainViewModel @Inject constructor(
     private fun startFileObserver(romRoot: String) {
         fileObserverJob?.cancel()
         repository.startFileObserver(romRoot) { change ->
-            // Debounce and handle file changes
             viewModelScope.launch {
-                delay(500) // Debounce
+                delay(500)
                 triggerFullScan(romRoot)
             }
         }
@@ -138,8 +133,7 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             val result = repository.launchGame(game)
             if (result.isFailure) {
-                val error = result.exceptionOrNull()
-                android.util.Log.e("Taizi", "Launch failed: ${error?.message}", error)
+                android.util.Log.e("Taizi", "Launch failed: ${result.exceptionOrNull()?.message}")
             }
         }
     }
@@ -203,9 +197,6 @@ class MainViewModel @Inject constructor(
     }
 }
 
-/**
- * Navigation screens
- */
 sealed class Screen {
     object SystemList : Screen()
     data class GameList(val systemId: String) : Screen()

@@ -10,29 +10,19 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons as MaterialIcons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.taizi.data.network.GitHubService
-import com.taizi.data.update.UpdateManager
-import com.taizi.data.update.UpdateCheckResult
-import com.taizi.domain.model.SemanticVersion
-import kotlinx.coroutines.launch
 
 private fun treeUriToFilePath(uri: Uri): String? {
     val docId = uri.lastPathSegment ?: return null
@@ -68,61 +58,13 @@ fun SettingsScreen(
     }
 
     var showClearCacheDialog by remember { mutableStateOf(false) }
-    var showCredentialsDialog by remember { mutableStateOf(false) }
-    var ssUsername by remember { mutableStateOf("") }
-    var ssPassword by remember { mutableStateOf("") }
     val scrapeStatus by viewModel.scrapeStatus.collectAsState()
-
-    var isCheckingUpdate by remember { mutableStateOf(false) }
-    var updateResult by remember { mutableStateOf<UpdateCheckResult?>(null) }
-    val scope = rememberCoroutineScope()
-
-    if (showCredentialsDialog) {
-        AlertDialog(
-            onDismissRequest = { showCredentialsDialog = false },
-            title = { Text("Twitch API Credentials") },
-            text = {
-                Column {
-                    Text(
-                        "Register a free app at dev.twitch.tv to get a Client ID and Secret for IGDB box art scraping.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = ssUsername,
-                        onValueChange = { ssUsername = it },
-                        label = { Text("Client ID") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = ssPassword,
-                        onValueChange = { ssPassword = it },
-                        label = { Text("Client Secret") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showCredentialsDialog = false
-                    viewModel.setScraperCredentials(ssUsername, ssPassword)
-                }) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCredentialsDialog = false }) { Text("Cancel") }
-            }
-        )
-    }
 
     if (showClearCacheDialog) {
         AlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
-            title = { Text("Clear Cache") },
-            text = { Text("This will clear the library cache and force a full rescan on next launch.") },
+            title = { Text("Clear Cache?") },
+            text = { Text("This will remove cached library data. Your ROMs and box art database are not affected.") },
             confirmButton = {
                 TextButton(onClick = {
                     showClearCacheDialog = false
@@ -157,7 +99,7 @@ fun SettingsScreen(
             item {
                 SettingsSection(title = "Library") {
                     SettingsItem(
-                        title = "ROM Folder",
+                        title = "ROM Root",
                         subtitle = currentLibrary?.romRoot ?: "Not set",
                         icon = MaterialIcons.Filled.Folder,
                         onClick = { folderPickerLauncher.launch(null) }
@@ -197,12 +139,6 @@ fun SettingsScreen(
                             onClick = { viewModel.scrapeAll() }
                         )
                     }
-                    SettingsItem(
-                        title = "Twitch API Credentials",
-                        subtitle = "Required for IGDB box art scraping",
-                        icon = MaterialIcons.Filled.AccountCircle,
-                        onClick = { showCredentialsDialog = true }
-                    )
                 }
             }
 
@@ -220,24 +156,11 @@ fun SettingsScreen(
                     )
                     SettingsItem(
                         title = "Battery Optimization",
-                        subtitle = if (isIgnoringBatteryOptimizations(context)) "Disabled" else "Enabled · tap to disable",
+                        subtitle = "Disable battery optimization for Taizi",
                         icon = MaterialIcons.Filled.BatteryChargingFull,
                         onClick = {
-                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                            }
-                            context.startActivity(intent)
-                        }
-                    )
-                    SettingsItem(
-                        title = "App Info",
-                        subtitle = "Open system app settings",
-                        icon = MaterialIcons.Filled.Settings,
-                        onClick = {
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            intent.data = Uri.parse("package:${context.packageName}")
                             context.startActivity(intent)
                         }
                     )
@@ -245,62 +168,17 @@ fun SettingsScreen(
             }
 
             item {
-                val versionName = try {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName
-                } catch (_: Exception) { "unknown" }
-
                 SettingsSection(title = "About") {
                     SettingsItem(
-                        title = "Taizi",
-                        subtitle = "Version $versionName",
+                        title = "Version",
+                        subtitle = "1.0.4",
                         icon = MaterialIcons.Filled.Info,
                         onClick = {}
                     )
-
-                    val currentVersion = try {
-                        SemanticVersion.fromString(versionName ?: "0.0.0")
-                    } catch (_: Exception) { SemanticVersion(0, 0, 0) }
-
-                    val updateManager = remember {
-                        UpdateManager(context, GitHubService(), "cloudwithax", "taizi")
-                    }
-
-                    SettingsItem(
-                        title = if (isCheckingUpdate) "Checking..." else "Check for updates",
-                        subtitle = if (isCheckingUpdate) "Please wait" else "Check GitHub for new releases",
-                        icon = MaterialIcons.Filled.SystemUpdateAlt,
-                        onClick = {
-                            scope.launch {
-                                isCheckingUpdate = true
-                                updateResult = updateManager.checkForUpdates(currentVersion)
-                                isCheckingUpdate = false
-                            }
-                        }
-                    )
-
-                    updateResult?.let { result ->
-                        if (result.isUpdateAvailable) {
-                            SettingsItem(
-                                title = "Update Available",
-                                subtitle = "Version ${result.latestVersion}",
-                                icon = MaterialIcons.Filled.CloudDownload,
-                                onClick = {
-                                    scope.launch {
-                                        updateManager.downloadUpdate(result.downloadUrl) { _: Int -> }
-                                    }
-                                }
-                            )
-                        }
-                    }
                 }
             }
         }
     }
-}
-
-private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
-    val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-    return pm.isIgnoringBatteryOptimizations(context.packageName)
 }
 
 @Composable
@@ -310,10 +188,10 @@ fun SettingsSection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        )
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -337,18 +215,10 @@ fun SettingsItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = tween(100),
-        label = "settingsItemPress"
-    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .clickable { onClick() }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
