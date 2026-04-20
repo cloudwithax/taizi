@@ -75,6 +75,7 @@ private fun treeUriToFilePath(uri: Uri): String? {
 fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     val currentScreen by viewModel.currentScreen.collectAsState()
+    val scanProgress by viewModel.scanProgress.collectAsState()
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -99,11 +100,11 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                 when (currentScreen) {
                     is Screen.SystemList -> {
                         when (val state = uiState) {
-                            MainUiState.Loading -> ScanningContent()
+                            MainUiState.Loading -> ScanningContent(scanProgress)
                             MainUiState.Initial -> InitialSetupContent(
                                 onSelectFolder = { folderPickerLauncher.launch(null) }
                             )
-                            MainUiState.Scanning -> ScanningContent()
+                            MainUiState.Scanning -> ScanningContent(scanProgress)
                             is MainUiState.LibraryLoaded -> SystemListScreen(
                                 systems = state.library.systems,
                                 onSystemClick = { viewModel.navigateToSystem(it.id) },
@@ -258,23 +259,28 @@ private fun HintCard(lines: List<String>) {
 }
 
 @Composable
-fun ScanningContent() {
+fun ScanningContent(progress: ScanProgress = ScanProgress()) {
     val transition = rememberInfiniteTransition(label = "scan")
     val angle by transition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
+            animation = tween(1400, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "angle"
     )
 
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 32.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Box(
                 modifier = Modifier
                     .size(96.dp)
@@ -293,15 +299,16 @@ fun ScanningContent() {
             ) {
                 Box(
                     modifier = Modifier
-                        .size(82.dp)
+                        .size(80.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(32.dp),
-                        strokeWidth = 3.dp,
-                        color = MaterialTheme.colorScheme.primary
+                    Text(
+                        text = if (progress.total > 0) "${progress.count}" else "…",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -311,13 +318,58 @@ fun ScanningContent() {
             Text(
                 text = "Scanning library",
                 style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
+
             Spacer(modifier = Modifier.height(6.dp))
+
             Text(
-                text = "Indexing ROMs · this may take a moment",
+                text = when {
+                    progress.total > 0 -> "${progress.count} / ${progress.total} ROMs"
+                    progress.count > 0 -> "${progress.count} ROMs"
+                    else -> "Indexing ROMs · this may take a moment"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            if (progress.gameName.isNotBlank()) {
+                CurrentRomLine(
+                    systemName = progress.systemName,
+                    gameName = progress.gameName
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CurrentRomLine(systemName: String, gameName: String) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            if (systemName.isNotBlank()) {
+                Text(
+                    text = systemName.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp),
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+            }
+            Text(
+                text = gameName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }

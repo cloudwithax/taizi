@@ -112,16 +112,21 @@ class LibraryRepositoryImpl(
                     emptyMap()
                 }
 
-                // Build games map with progress reporting
+                // First pass: collect ROM files per system so we know the total up front
+                val filesBySystem: Map<System, List<File>> = systems.associateWith { collectRomFiles(it) }
+                val total = filesBySystem.values.sumOf { it.size }
+
+                // Second pass: parse and report live progress per ROM
                 var scannedCount = 0
                 val gamesBySystem = mutableMapOf<String, List<Game>>()
-                for (system in systems) {
-                    val games = scanGamesForSystem(system)
-                    gamesBySystem[system.id] = games
-                    games.forEach { game ->
+                for ((system, files) in filesBySystem) {
+                    val games = files.map { file ->
                         scannedCount++
-                        onProgress?.invoke(game.name, system.name, scannedCount, 0)
-                    }
+                        val game = parseGameFile(file, system.id)
+                        onProgress?.invoke(game.name, system.name, scannedCount, total)
+                        game
+                    }.sortedBy { it.name.lowercase() }
+                    gamesBySystem[system.id] = games
                 }
 
                 // Restore box art paths from database
@@ -252,7 +257,7 @@ class LibraryRepositoryImpl(
         return count
     }
 
-    private fun scanGamesForSystem(system: System): List<Game> {
+    private fun collectRomFiles(system: System): List<File> {
         val folder = File(system.path)
         if (!folder.exists()) return emptyList()
 
@@ -279,11 +284,13 @@ class LibraryRepositoryImpl(
             }
         }
         collectROMs(folder, 1)
-
-        return romFiles.map { file ->
-            parseGameFile(file, system.id)
-        }.sortedBy { it.name.lowercase() }
+        return romFiles
     }
+
+    private fun scanGamesForSystem(system: System): List<Game> =
+        collectRomFiles(system)
+            .map { parseGameFile(it, system.id) }
+            .sortedBy { it.name.lowercase() }
 
     private fun parseGameFile(file: File, systemId: String): Game {
         val filename = file.nameWithoutExtension
