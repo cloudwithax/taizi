@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 4
-        versionName = "1.0.4-release"
+        versionName = "1.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -141,6 +141,9 @@ dependencies {
 
     // JSON
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // HTTP Client
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Room (box art database)
     implementation("androidx.room:room-runtime:2.6.1")

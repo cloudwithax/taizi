@@ -28,6 +28,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.taizi.data.network.GitHubService
+import com.taizi.data.update.UpdateManager
+import com.taizi.data.update.UpdateCheckResult
+import com.taizi.domain.model.SemanticVersion
+import kotlinx.coroutines.launch
 
 private fun treeUriToFilePath(uri: Uri): String? {
     val docId = uri.lastPathSegment ?: return null
@@ -67,6 +72,10 @@ fun SettingsScreen(
     var ssUsername by remember { mutableStateOf("") }
     var ssPassword by remember { mutableStateOf("") }
     val scrapeStatus by viewModel.scrapeStatus.collectAsState()
+
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var updateResult by remember { mutableStateOf<UpdateCheckResult?>(null) }
+    val scope = rememberCoroutineScope()
 
     if (showCredentialsDialog) {
         AlertDialog(
@@ -247,6 +256,42 @@ fun SettingsScreen(
                         icon = MaterialIcons.Filled.Info,
                         onClick = {}
                     )
+
+                    val currentVersion = try {
+                        SemanticVersion.fromString(versionName ?: "0.0.0")
+                    } catch (_: Exception) { SemanticVersion(0, 0, 0) }
+
+                    val updateManager = remember {
+                        UpdateManager(context, GitHubService(), "cloudwithax", "taizi")
+                    }
+
+                    SettingsItem(
+                        title = if (isCheckingUpdate) "Checking..." else "Check for updates",
+                        subtitle = if (isCheckingUpdate) "Please wait" else "Check GitHub for new releases",
+                        icon = MaterialIcons.Filled.SystemUpdateAlt,
+                        onClick = {
+                            scope.launch {
+                                isCheckingUpdate = true
+                                updateResult = updateManager.checkForUpdates(currentVersion)
+                                isCheckingUpdate = false
+                            }
+                        }
+                    )
+
+                    updateResult?.let { result ->
+                        if (result.isUpdateAvailable) {
+                            SettingsItem(
+                                title = "Update Available",
+                                subtitle = "Version ${result.latestVersion}",
+                                icon = MaterialIcons.Filled.CloudDownload,
+                                onClick = {
+                                    scope.launch {
+                                        updateManager.downloadUpdate(result.downloadUrl) { _: Int -> }
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
