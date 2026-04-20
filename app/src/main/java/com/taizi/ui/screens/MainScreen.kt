@@ -4,27 +4,61 @@ import android.net.Uri
 import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons as MaterialIcons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.taizi.domain.model.Game
-import com.taizi.domain.model.Library
-import com.taizi.domain.model.System
 import com.taizi.ui.components.StatusBar
+import com.taizi.ui.theme.BrandAccent
 import com.taizi.ui.theme.TaiziTheme
 
 private fun treeUriToFilePath(uri: Uri): String? {
     val docId = uri.lastPathSegment ?: return null
-    // Document IDs look like "primary:roms" or "XXXX-XXXX:roms"
     val split = docId.split(":")
     if (split.size < 2) return null
     val volume = split[0]
@@ -37,88 +71,23 @@ private fun treeUriToFilePath(uri: Uri): String? {
     return "$root/$relativePath"
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(
-    viewModel: MainViewModel = hiltViewModel()
-) {
+fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     val currentScreen by viewModel.currentScreen.collectAsState()
-
-    var showScanningDialog by remember { mutableStateOf(false) }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
-        if (uri != null) {
-            val path = treeUriToFilePath(uri)
-            if (path != null) {
-                viewModel.triggerFullScan(path)
-            }
-        }
-    }
-
-    LaunchedEffect(uiState) {
-        showScanningDialog = uiState is MainUiState.Scanning
-    }
-
-    if (showScanningDialog) {
-        ScanningDialog()
+        uri?.let { treeUriToFilePath(it) }?.let(viewModel::triggerFullScan)
     }
 
     TaiziTheme {
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = {
-                Column {
+                Box(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)) {
                     StatusBar()
-                    when (currentScreen) {
-                        is com.taizi.ui.screens.Screen.SystemList -> {
-                            TopAppBar(
-                                title = {
-                                    Text(
-                                        text = "Taizi",
-                                        fontSize = 18.sp,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                    )
-                                },
-                                actions = {
-                                    IconButton(onClick = { viewModel.setScreen(com.taizi.ui.screens.Screen.Settings) }) {
-                                         Icon(MaterialIcons.Filled.Settings, contentDescription = "Settings")
-                                    }
-                                }
-                            )
-                        }
-                        is com.taizi.ui.screens.Screen.GameList -> {
-                            val systemId = (currentScreen as com.taizi.ui.screens.Screen.GameList).systemId
-                            val system = viewModel.getSystemById(systemId)
-                            TopAppBar(
-                                title = {
-                                    Text(
-                                        text = system?.name ?: "Games",
-                                        fontSize = 18.sp
-                                    )
-                                },
-                                navigationIcon = {
-                                IconButton(onClick = { viewModel.navigateBack() }) {
-                                     Icon(MaterialIcons.Filled.ArrowBack, contentDescription = "Back")
-                                }
-                                }
-                            )
-                        }
-                        else -> {}
-                    }
-                }
-            },
-            floatingActionButton = {
-                when (currentScreen) {
-                    is com.taizi.ui.screens.Screen.SystemList -> {
-                        FloatingActionButton(
-                            onClick = { viewModel.triggerFullScan() }
-                        ) {
-                             Icon(MaterialIcons.Filled.Refresh, contentDescription = "Scan Library")
-                        }
-                    }
-                    else -> {}
                 }
             }
         ) { paddingValues ->
@@ -128,55 +97,39 @@ fun MainScreen(
                     .padding(paddingValues)
             ) {
                 when (currentScreen) {
-                    is com.taizi.ui.screens.Screen.SystemList -> {
-                        when (uiState) {
-                            MainUiState.Loading -> Box(Modifier.fillMaxSize())
-                            is MainUiState.Initial,
-                            is MainUiState.Scanning -> {
-                                // Show initial/scanning state
-                                when (uiState) {
-                                    is MainUiState.Scanning -> ScanningContent()
-                                    else -> InitialSetupContent(
-                                        onSelectFolder = { folderPickerLauncher.launch(null) }
-                                    )
-                                }
-                            }
-                            is MainUiState.LibraryLoaded -> {
-                                val library = (uiState as MainUiState.LibraryLoaded).library
-                                SystemListScreen(
-                                    systems = library.systems,
-                                    onSystemClick = { system ->
-                                        viewModel.navigateToSystem(system.id)
-                                    },
-                                    onScanClick = { viewModel.triggerFullScan() }
-                                )
-                            }
-                            is MainUiState.Error -> {
-                                ErrorContent(
-                                    message = (uiState as MainUiState.Error).message,
-                                    onRetry = { viewModel.triggerFullScan() }
-                                )
-                            }
+                    is Screen.SystemList -> {
+                        when (val state = uiState) {
+                            MainUiState.Loading -> ScanningContent()
+                            MainUiState.Initial -> InitialSetupContent(
+                                onSelectFolder = { folderPickerLauncher.launch(null) }
+                            )
+                            MainUiState.Scanning -> ScanningContent()
+                            is MainUiState.LibraryLoaded -> SystemListScreen(
+                                systems = state.library.systems,
+                                onSystemClick = { viewModel.navigateToSystem(it.id) },
+                                onScanClick = { viewModel.triggerFullScan() },
+                                onSettingsClick = { viewModel.setScreen(Screen.Settings) }
+                            )
+                            is MainUiState.Error -> ErrorContent(
+                                message = state.message,
+                                onRetry = { viewModel.triggerFullScan() }
+                            )
                         }
                     }
-                    is com.taizi.ui.screens.Screen.GameList -> {
-                        val systemId = (currentScreen as com.taizi.ui.screens.Screen.GameList).systemId
+                    is Screen.GameList -> {
+                        val systemId = (currentScreen as Screen.GameList).systemId
                         GameListScreen(
                             systemId = systemId,
                             viewModel = viewModel,
-                            onGameClick = { game ->
-                                viewModel.launchGame(game)
-                            },
-                            onBack = { viewModel.navigateBack() }
+                            onGameClick = viewModel::launchGame,
+                            onBack = viewModel::navigateBack
                         )
                     }
-                    is com.taizi.ui.screens.Screen.Settings -> {
-                        SettingsScreen(
-                            viewModel = viewModel,
-                            onNavigateUp = { viewModel.navigateBack() }
-                        )
-                    }
-                    else -> {}
+                    is Screen.Settings -> SettingsScreen(
+                        viewModel = viewModel,
+                        onNavigateUp = viewModel::navigateBack
+                    )
+                    else -> Unit
                 }
             }
         }
@@ -184,130 +137,194 @@ fun MainScreen(
 }
 
 @Composable
-fun ScanningDialog() {
-    AlertDialog(
-        onDismissRequest = { /* Cannot dismiss */ },
-        title = { Text("Scanning Library") },
-        text = {
-            Column {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth()
+fun InitialSetupContent(onSelectFolder: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF1B0A17),
+                        MaterialTheme.colorScheme.background
+                    )
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+            )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Wordmark()
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "a launcher for your retro handheld",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            Button(
+                onClick = onSelectFolder,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+            ) {
+                Icon(Icons.Filled.FolderOpen, contentDescription = null)
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Please wait while we scan your ROM folders…",
-                    style = MaterialTheme.typography.bodyMedium
+                    text = "Choose ROM folder",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
                 )
             }
-        },
-        confirmButton = {}
-    )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            HintCard(
+                lines = listOf(
+                    "Organize ROMs by system in subfolders:",
+                    "roms/snes/  roms/gba/  roms/psx/"
+                )
+            )
+        }
+    }
 }
 
 @Composable
-fun InitialSetupContent(
-    onSelectFolder: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = MaterialIcons.Filled.SportsEsports,
-            contentDescription = null,
-            modifier = Modifier.size(96.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Welcome to Taizi",
-            fontSize = 24.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "A lightweight launcher for RG DS",
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Button(
-            onClick = onSelectFolder,
-            modifier = Modifier.fillMaxWidth()
+private fun Wordmark() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(BrandAccent, Color(0xFF7A1236))
+                    )
+                ),
+            contentAlignment = Alignment.Center
         ) {
-                Icon(
-                    imageVector = MaterialIcons.Filled.FolderOpen,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Select ROM Folder")
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(34.dp)
+            )
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
+        Spacer(modifier = Modifier.width(14.dp))
         Text(
-            text = "Make sure your ROMs are organized in folders like:\n/storage/roms/gb/\n/storage/roms/gba/",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = "taizi",
+            fontSize = 44.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
 
 @Composable
-fun ErrorContent(
-    message: String,
-    onRetry: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+private fun HintCard(lines: List<String>) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Icon(
-            imageVector = MaterialIcons.Filled.Error,
-            contentDescription = null,
-            modifier = Modifier.size(96.dp),
-            tint = MaterialTheme.colorScheme.error
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Error",
-            fontSize = 24.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = message,
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.error
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(onClick = onRetry) {
-            Text("Retry")
+        Column(modifier = Modifier.padding(16.dp)) {
+            lines.forEachIndexed { index, line ->
+                Text(
+                    text = line,
+                    style = if (index == 0) MaterialTheme.typography.labelMedium
+                    else MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    ),
+                    color = if (index == 0) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface
+                )
+                if (index < lines.size - 1) Spacer(modifier = Modifier.height(4.dp))
+            }
         }
     }
 }
 
 @Composable
 fun ScanningContent() {
+    val transition = rememberInfiniteTransition(label = "scan")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "angle"
+    )
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .graphicsLayer { rotationZ = angle }
+                    .clip(CircleShape)
+                    .background(
+                        Brush.sweepGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.primary,
+                                Color.Transparent
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(82.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.background),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(32.dp),
+                        strokeWidth = 3.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Scanning library",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Indexing ROMs · this may take a moment",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun ErrorContent(message: String, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -315,25 +332,43 @@ fun ScanningContent() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(64.dp),
-            strokeWidth = 4.dp
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ErrorOutline,
+                contentDescription = null,
+                modifier = Modifier.size(36.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = "Something went wrong",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            text = "Scanning…",
-            fontSize = 20.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "This may take a few minutes depending on library size.",
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Button(
+            onClick = onRetry,
+            shape = RoundedCornerShape(12.dp)
+        ) { Text("Retry") }
     }
 }

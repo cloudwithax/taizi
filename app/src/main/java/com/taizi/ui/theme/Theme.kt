@@ -12,35 +12,39 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// Custom dark color scheme for Taizi
+val BrandAccent = Color(0xFFFF2E63)
+val BrandAccentSoft = Color(0xFFFF6B8A)
+
 val DarkColorPalette = darkColorScheme(
-    primary = Color(0xFFFF0057),
+    primary = BrandAccent,
     onPrimary = Color.White,
-    secondary = Color(0xFFFFD700),
-    onSecondary = Color.Black,
-    tertiary = Color(0xFF3E2723),
-    background = Color(0xFF121212),
-    onBackground = Color.White,
-    surface = Color(0xFF1E1E1E),
-    onSurface = Color.White,
-    surfaceVariant = Color(0xFF252525),
-    onSurfaceVariant = Color(0xFFB0B0B0),
-    outline = Color(0xFF333333),
-    outlineVariant = Color(0xFF444444)
+    primaryContainer = Color(0xFF3A0F1E),
+    onPrimaryContainer = BrandAccentSoft,
+    secondary = Color(0xFFFFC857),
+    onSecondary = Color(0xFF1A1204),
+    tertiary = Color(0xFF5B4BFF),
+    background = Color(0xFF0B0B10),
+    onBackground = Color(0xFFF2F2F5),
+    surface = Color(0xFF14141C),
+    onSurface = Color(0xFFF2F2F5),
+    surfaceVariant = Color(0xFF1D1D28),
+    onSurfaceVariant = Color(0xFF9A9AAB),
+    outline = Color(0xFF2A2A36),
+    outlineVariant = Color(0xFF3A3A48)
 )
 
 val LightColorPalette = lightColorScheme(
-    primary = Color(0xFFFF0057),
+    primary = BrandAccent,
     onPrimary = Color.White,
-    secondary = Color(0xFFFFD700),
+    secondary = Color(0xFFFFC857),
     onSecondary = Color.Black,
-    background = Color(0xFFFFFFFF),
-    onBackground = Color.Black,
+    background = Color(0xFFFAFAFC),
+    onBackground = Color(0xFF14141C),
     surface = Color.White,
-    onSurface = Color.Black,
-    surfaceVariant = Color(0xFFF5F5F5),
-    onSurfaceVariant = Color(0xFF444444),
-    outline = Color(0xFFCCCCCC)
+    onSurface = Color(0xFF14141C),
+    surfaceVariant = Color(0xFFF1F1F5),
+    onSurfaceVariant = Color(0xFF525266),
+    outline = Color(0xFFD0D0D8)
 )
 
 @Composable
@@ -48,14 +52,17 @@ fun TaiziTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorPalette else DarkColorPalette // Force dark for RG DS
+    val colorScheme = DarkColorPalette
 
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            window.statusBarColor = Color.Transparent.toArgb()
+            window.navigationBarColor = Color.Transparent.toArgb()
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = false
+            controller.isAppearanceLightNavigationBars = false
         }
     }
 

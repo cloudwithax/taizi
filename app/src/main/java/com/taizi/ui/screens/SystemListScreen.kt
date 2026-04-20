@@ -1,148 +1,440 @@
 package com.taizi.ui.screens
 
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.material.icons.Icons as MaterialIcons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.rememberAsyncImagePainter
-import coil.request.ImageRequest
 import com.taizi.domain.model.BiosStatus
 import com.taizi.domain.model.System
-import com.taizi.ui.theme.DarkColorPalette
-import kotlinx.coroutines.delay
+import com.taizi.ui.theme.SystemAccent
+import com.taizi.ui.theme.accentFor
+import kotlin.math.absoluteValue
+
 @Composable
 fun SystemListScreen(
     systems: List<System>,
     onSystemClick: (System) -> Unit,
     onScanClick: () -> Unit,
+    onSettingsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val columns = when {
-        systems.size <= 4 -> 2
-        systems.size <= 8 -> 3
-        else -> 4
+    if (systems.isEmpty()) {
+        EmptySystems(modifier = modifier)
+        return
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(count = systems.size) { index ->
-                SystemCard(
-                    system = systems[index],
-                    onClick = { onSystemClick(systems[index]) }
+    val pagerState = rememberPagerState(pageCount = { systems.size })
+    val focused = systems.getOrNull(pagerState.currentPage) ?: systems.first()
+    val focusedAccent = accentFor(focused.id)
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        AccentGlow(accent = focusedAccent)
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            LibraryHeader(
+                totalSystems = systems.size,
+                totalGames = systems.sumOf { it.romCount },
+                onScanClick = onScanClick,
+                onSettingsClick = onSettingsClick
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            HorizontalPager(
+                state = pagerState,
+                contentPadding = PaddingValues(horizontal = 64.dp),
+                pageSpacing = 16.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(280.dp)
+            ) { page ->
+                val offset = ((pagerState.currentPage - page) +
+                        pagerState.currentPageOffsetFraction).absoluteValue
+                SystemTile(
+                    system = systems[page],
+                    accent = accentFor(systems[page].id),
+                    pageOffset = offset,
+                    onClick = { onSystemClick(systems[page]) }
                 )
             }
-        }
 
-        // Floating Scan Button
-        FloatingActionButton(
-            onClick = onScanClick,
-            modifier = Modifier
-                .padding(16.dp)
-                .align(Alignment.End)
-        ) {
-            Icon(MaterialIcons.Filled.Refresh, contentDescription = "Scan Library")
+            Spacer(modifier = Modifier.height(20.dp))
+
+            PagerDots(
+                count = systems.size,
+                current = pagerState.currentPage,
+                activeColor = focusedAccent.primary
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            FocusedSystemMeta(system = focused)
+
+            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }
 
 @Composable
-fun SystemCard(
-    system: System,
-    onClick: () -> Unit
+private fun LibraryHeader(
+    totalSystems: Int,
+    totalGames: Int,
+    onScanClick: () -> Unit,
+    onSettingsClick: () -> Unit
 ) {
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = DarkColorPalette.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "LIBRARY",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    letterSpacing = 4.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "$totalSystems systems · $totalGames games",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        CircularIconButton(onClick = onScanClick) {
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = "Rescan library",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        CircularIconButton(onClick = onSettingsClick) {
+            Icon(
+                imageVector = Icons.Filled.Settings,
+                contentDescription = "Settings",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun CircularIconButton(
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.size(40.dp)
+    ) {
+        IconButton(onClick = onClick) { content() }
+    }
+}
+
+@Composable
+private fun AccentGlow(accent: SystemAccent) {
+    val animated by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(400),
+        label = "glow"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { alpha = 0.55f * animated }
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(accent.secondary, Color.Transparent),
+                    radius = 1100f
+                )
+            )
+    )
+}
+
+@Composable
+private fun SystemTile(
+    system: System,
+    accent: SystemAccent,
+    pageOffset: Float,
+    onClick: () -> Unit
+) {
+    val scale = 1f - (pageOffset.coerceIn(0f, 1f) * 0.18f)
+    val alpha = 1f - (pageOffset.coerceIn(0f, 1f) * 0.55f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .aspectRatio(0.78f)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = alpha
+            }
+            .clip(RoundedCornerShape(28.dp))
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        accent.primary,
+                        accent.secondary,
+                        Color(0xFF0B0B10)
+                    )
+                )
+            )
+            .clickable { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color(0xCC0B0B10)),
+                        startY = 400f
+                    )
+                )
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(20.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // System Icon (placeholder - would use actual box art in future)
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(Color(0xFF3A3A3A)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Icon(
-                    imageVector = MaterialIcons.Filled.SportsEsports,
-                    contentDescription = system.name,
-                    modifier = Modifier.size(48.dp),
-                    tint = Color(0xFF6A6A6A)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = system.name,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "${system.romCount} games",
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            // BIOS status indicator
-            if (system.biosStatus == com.taizi.domain.model.BiosStatus.MISSING) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector =                         MaterialIcons.Filled.Warning,
-                    contentDescription = "BIOS Missing",
-                    tint = Color.Red,
-                    modifier = Modifier.size(12.dp)
-                )
-                    Spacer(modifier = Modifier.width(4.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.35f)
+                ) {
                     Text(
-                        text = "BIOS",
-                        fontSize = 8.sp,
-                        color = Color.Red
+                        text = accent.label,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 2.sp
+                        ),
+                        color = Color.White
                     )
                 }
+                if (system.biosStatus == BiosStatus.MISSING) {
+                    BiosChip()
+                }
+            }
+
+            Column {
+                Text(
+                    text = system.name,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "${system.romCount} ${if (system.romCount == 1) "game" else "games"}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun BiosChip() {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = Color.Black.copy(alpha = 0.45f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Warning,
+                contentDescription = null,
+                tint = Color(0xFFFFC857),
+                modifier = Modifier.size(12.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "BIOS",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                ),
+                color = Color(0xFFFFC857)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PagerDots(count: Int, current: Int, activeColor: Color) {
+    val displayCount = count.coerceAtMost(9)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(displayCount) { i ->
+            val isActive = i == (current.coerceAtMost(displayCount - 1))
+            val width by animateFloatAsState(
+                targetValue = if (isActive) 18f else 6f,
+                animationSpec = tween(220),
+                label = "dot"
+            )
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 3.dp)
+                    .height(6.dp)
+                    .width(width.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isActive) activeColor
+                        else MaterialTheme.colorScheme.outline
+                    )
+            )
+        }
+        if (count > displayCount) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "${current + 1}/$count",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun FocusedSystemMeta(system: System) {
+    val accent = accentFor(system.id)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MetaPill(
+            label = "Emulator",
+            value = system.emulatorType.ifBlank { "—" },
+            accent = accent.primary
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        MetaPill(
+            label = "Games",
+            value = system.romCount.toString(),
+            accent = accent.primary
+        )
+        if (system.biosStatus == BiosStatus.MISSING) {
+            Spacer(modifier = Modifier.width(12.dp))
+            MetaPill(
+                label = "Status",
+                value = "BIOS needed",
+                accent = MaterialTheme.colorScheme.secondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetaPill(label: String, value: String, accent: Color) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp),
+            color = accent
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun EmptySystems(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "No systems found",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Add ROMs to your library and rescan.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }
