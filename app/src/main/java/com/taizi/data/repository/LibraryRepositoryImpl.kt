@@ -26,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -71,7 +72,9 @@ class LibraryRepositoryImpl(
      * Load cached library from DataStore if available
      */
     override suspend fun loadCachedLibraryIfAvailable() {
-        val cached = localDataSource.getLibraryCache()
+        val cached = withContext(Dispatchers.IO) {
+            localDataSource.getLibraryCache()
+        }
         if (cached != null && cached.romRoot.isNotEmpty()) {
             _library.value = cached
         }
@@ -127,29 +130,30 @@ class LibraryRepositoryImpl(
                     emptyMap()
                 }
 
-                // First pass: collect ROM files per system from every source folder,
-                // deduped by canonical path. Knowing the total up front lets the
-                // progress UI show a stable "n / total" count.
-                val filesBySystem: Map<System, List<File>> = systems.associateWith { sys ->
-                    val seen = hashSetOf<String>()
-                    (foldersById[sys.id] ?: listOf(File(sys.path))).flatMap { folder ->
-                        collectRomFiles(folder, sys.id)
-                    }.filter { seen.add(it.absolutePath) }
-                }
-                val total = filesBySystem.values.sumOf { it.size }
-
-                // Second pass: parse and report live progress per ROM
+                // Single streaming pass: walk each system's folders and parse every
+                // ROM as it's discovered so the UI sees each filename live. No
+                // pre-count means total is 0 until the scan finishes.
                 var scannedCount = 0
                 val gamesBySystem = mutableMapOf<String, List<Game>>()
-                for ((system, files) in filesBySystem) {
-                    val games = files.map { file ->
-                        scannedCount++
-                        val game = parseGameFile(file, system.id)
-                        onProgress?.invoke(game.name, system.name, scannedCount, total)
-                        game
-                    }.sortedBy { it.name.lowercase() }
-                    gamesBySystem[system.id] = games
+                for (system in systems) {
+                    ensureActive()
+                    val seen = hashSetOf<String>()
+                    val games = mutableListOf<Game>()
+                    val folders = foldersById[system.id] ?: listOf(File(system.path))
+                    for (folder in folders) {
+                        walkRomFiles(folder, system.id) { file ->
+                            if (seen.add(file.absolutePath)) {
+                                scannedCount++
+                                val game = parseGameFile(file, system.id)
+                                onProgress?.invoke(game.name, system.name, scannedCount, 0)
+                                games.add(game)
+                            }
+                        }
+                    }
+                    gamesBySystem[system.id] = games.sortedBy { it.name.lowercase() }
                 }
+                // Final emit so the UI lands on "N / N ROMs"
+                onProgress?.invoke("", "", scannedCount, scannedCount)
 
                 // Restore box art paths from database
                 val allArt = boxArtDao.getAll().associateBy { it.romPath }
@@ -319,25 +323,29 @@ class LibraryRepositoryImpl(
     }
 
     private fun collectRomFiles(folder: File, systemId: String): List<File> {
-        if (!folder.exists()) return emptyList()
+        val files = mutableListOf<File>()
+        walkRomFiles(folder, systemId) { files.add(it) }
+        return files
+    }
 
-        val def = systemDefinitions[systemId] ?: return emptyList()
+    private inline fun walkRomFiles(folder: File, systemId: String, onFile: (File) -> Unit) {
+        if (!folder.exists()) return
+        val def = systemDefinitions[systemId] ?: return
         val validExtensions = def.extensions.map { it.lowercase() }.toSet()
 
-        val romFiles = mutableListOf<File>()
-        fun collectROMs(dir: File, depth: Int) {
-            if (depth > 2) return
+        val stack = ArrayDeque<Pair<File, Int>>()
+        stack.addLast(folder to 1)
+        while (stack.isNotEmpty()) {
+            val (dir, depth) = stack.removeLast()
+            if (depth > 2) continue
             dir.listFiles()?.forEach { file ->
                 if (file.isDirectory) {
-                    if (isSkippableDir(file.name)) return@forEach
-                    collectROMs(file, depth + 1)
+                    if (!isSkippableDir(file.name)) stack.addLast(file to depth + 1)
                 } else if (isRomFile(file, validExtensions)) {
-                    romFiles.add(file)
+                    onFile(file)
                 }
             }
         }
-        collectROMs(folder, 1)
-        return romFiles
     }
 
     private fun parseGameFile(file: File, systemId: String): Game {
@@ -424,12 +432,12 @@ class LibraryRepositoryImpl(
         return status
     }
 
-    override suspend fun refreshSystem(systemId: String): Result<Library> {
+    override suspend fun refreshSystem(systemId: String): Result<Library> = withContext(Dispatchers.IO) {
         val currentLibrary = _library.value
         val system = currentLibrary.systems.find { it.id == systemId }
-            ?: return Result.failure(Exception("System not found"))
+            ?: return@withContext Result.failure(Exception("System not found"))
 
-        return try {
+        try {
             val newSystem = scanSystemFolder(File(system.path), localDataSource.getCustomMappings())
             if (newSystem != null) {
                 val newSystems = currentLibrary.systems.map { if (it.id == systemId) newSystem else it }

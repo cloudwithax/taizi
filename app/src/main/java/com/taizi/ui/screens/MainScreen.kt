@@ -4,12 +4,7 @@ import android.net.Uri
 import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,20 +28,27 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -260,16 +262,17 @@ private fun HintCard(lines: List<String>) {
 
 @Composable
 fun ScanningContent(progress: ScanProgress = ScanProgress()) {
-    val transition = rememberInfiniteTransition(label = "scan")
-    val angle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "angle"
-    )
+    val angle = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        var startNanos = 0L
+        while (true) {
+            withFrameNanos { now ->
+                if (startNanos == 0L) startNanos = now
+                val elapsedMs = (now - startNanos) / 1_000_000f
+                angle.floatValue = (elapsedMs / 1400f * 360f) % 360f
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -281,36 +284,22 @@ fun ScanningContent(progress: ScanProgress = ScanProgress()) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Box(
+            Canvas(
                 modifier = Modifier
-                    .size(96.dp)
-                    .graphicsLayer { rotationZ = angle }
-                    .clip(CircleShape)
-                    .background(
-                        Brush.sweepGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.primary,
-                                Color.Transparent
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
+                    .size(48.dp)
+                    .graphicsLayer { rotationZ = angle.floatValue }
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.background),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (progress.total > 0) "${progress.count}" else "…",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                val stroke = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                val inset = stroke.width / 2f
+                drawArc(
+                    color = BrandAccent,
+                    startAngle = 0f,
+                    sweepAngle = 270f,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = Size(size.width - stroke.width, size.height - stroke.width),
+                    style = stroke
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
