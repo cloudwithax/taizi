@@ -489,11 +489,26 @@ class LibraryRepositoryImpl(
     }
 
     private fun buildLaunchIntent(system: System, packageName: String, game: Game): Intent {
-        if (system.emulatorType == "RetroArch") {
-            return Intent("org.libretro.RUN_GAME").apply {
-                `package` = packageName
-                putExtra("core", system.core)
-                putExtra("rom", game.path)
+        if (system.emulatorType.equals("retroarch", ignoreCase = true)) {
+            // RetroArch Android exposes RetroActivityFuture (exported=true) and
+            // expects ACTION_MAIN with ROM/LIBRETRO/CONFIGFILE extras. The
+            // LIBRETRO extra must be the full path to the core .so file in
+            // RetroArch's private cores dir; cores are named
+            // "<core>_libretro_android.so".
+            val coreName = system.core ?: ""
+            val libretroPath = "/data/user/0/$packageName/cores/${coreName}_libretro_android.so"
+            val configPath = "/storage/emulated/0/Android/data/$packageName/files/retroarch.cfg"
+            return Intent(Intent.ACTION_MAIN).apply {
+                component = android.content.ComponentName(
+                    packageName,
+                    "com.retroarch.browser.retroactivity.RetroActivityFuture"
+                )
+                putExtra("ROM", game.path)
+                putExtra("LIBRETRO", libretroPath)
+                putExtra("CONFIGFILE", configPath)
+                putExtra("QUITFOCUS", "")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
         }
         // Standalones (Flycast, DraStic, PPSSPP, Mupen64Plus, Azahar, ...)

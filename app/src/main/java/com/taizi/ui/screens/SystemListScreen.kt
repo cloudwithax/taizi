@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -37,6 +36,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -49,9 +49,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
@@ -61,13 +63,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.taizi.domain.model.System
 import com.taizi.ui.theme.SystemAccent
 import com.taizi.ui.theme.accentFor
@@ -80,6 +83,7 @@ fun SystemListScreen(
     systems: List<System>,
     onSystemClick: (System) -> Unit,
     onScanClick: () -> Unit,
+    onSelectFolder: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onAppsClick: () -> Unit = {},
@@ -87,7 +91,11 @@ fun SystemListScreen(
     viewModel: MainViewModel = hiltViewModel()
 ) {
     if (systems.isEmpty()) {
-        EmptySystems(modifier = modifier)
+        EmptySystems(
+            onSelectFolder = onSelectFolder,
+            onScanClick = onScanClick,
+            modifier = modifier
+        )
         return
     }
 
@@ -288,8 +296,8 @@ private fun SystemTile(
                     .graphicsLayer { alpha = 0.95f }
             )
         } else if (imageRes != null) {
-            Image(
-                painter = painterResource(id = imageRes),
+            AsyncImage(
+                model = imageRes,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
@@ -389,8 +397,18 @@ private fun PagerDots(
     var scrubbing by remember { mutableStateOf(false) }
     var scrubFrac by remember { mutableFloatStateOf(0f) }
 
-    val fracCurrent = if (scrubbing) scrubFrac
-        else pagerState.currentPage + pagerState.currentPageOffsetFraction
+    var smoothFrac by remember {
+        mutableFloatStateOf(pagerState.currentPage + pagerState.currentPageOffsetFraction)
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            withFrameNanos {
+                val target = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                smoothFrac += (target - smoothFrac) * 0.25f
+            }
+        }
+    }
+    val fracCurrent = if (scrubbing) scrubFrac else smoothFrac
     val fracWindowStart = (fracCurrent - anchor).coerceIn(0f, maxStart.toFloat())
     val targetOffset = -(step * fracWindowStart)
     val offset by animateDpAsState(
@@ -405,6 +423,7 @@ private fun PagerDots(
     val windowWidth = step * windowSize + (activeWidth - dotSize)
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val view = LocalView.current
     val scrubPxPerPage = with(density) { 28.dp.toPx() }
 
     val scrubScale by animateFloatAsState(
@@ -427,6 +446,7 @@ private fun PagerDots(
                     val startX = longPress.position.x
                     scrubFrac = originPage.toFloat()
                     scrubbing = true
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                     var lastPage = originPage
 
                     try {
@@ -443,6 +463,7 @@ private fun PagerDots(
                             val target = cont.roundToInt().coerceIn(0, count - 1)
                             if (target != lastPage) {
                                 lastPage = target
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                                 scope.launch { pagerState.scrollToPage(target) }
                             }
                         }
@@ -542,7 +563,11 @@ private fun MetaPill(label: String, value: String, accent: Color) {
 }
 
 @Composable
-private fun EmptySystems(modifier: Modifier = Modifier) {
+private fun EmptySystems(
+    onSelectFolder: () -> Unit,
+    onScanClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -557,10 +582,18 @@ private fun EmptySystems(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Add ROMs to your library and rescan.",
+            text = "Add ROMs to your library and rescan, or choose a different folder.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(onClick = onSelectFolder) {
+            Text(text = "Choose ROM folder")
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(onClick = onScanClick) {
+            Text(text = "Rescan")
+        }
     }
 }

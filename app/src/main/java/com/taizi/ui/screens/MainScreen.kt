@@ -116,6 +116,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                                 systems = viewModel.systemsForDisplay(state.library),
                                 onSystemClick = { viewModel.navigateToSystem(it.id) },
                                 onScanClick = { viewModel.triggerFullScan() },
+                                onSelectFolder = { folderPickerLauncher.launch(null) },
                                 onSettingsClick = { viewModel.setScreen(Screen.Settings) },
                                 onSearchClick = { viewModel.setScreen(Screen.Search) },
                                 onAppsClick = { viewModel.setScreen(Screen.AppDrawer) }

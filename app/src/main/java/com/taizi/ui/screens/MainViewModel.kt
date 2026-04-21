@@ -110,11 +110,12 @@ class MainViewModel @Inject constructor(
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             val hadLibrary = _uiState.value is MainUiState.LibraryLoaded
-            if (!hadLibrary) _uiState.value = MainUiState.Scanning
+            val isNewRoot = romRoot != null
+            if (!hadLibrary || isNewRoot) _uiState.value = MainUiState.Scanning
 
             val root = romRoot ?: repository.getLibrary().value.romRoot
             if (root.isEmpty()) {
-                if (!hadLibrary) _uiState.value = MainUiState.Error("No ROM root configured")
+                if (!hadLibrary || isNewRoot) _uiState.value = MainUiState.Error("No ROM root configured")
                 return@launch
             }
 
@@ -128,7 +129,7 @@ class MainViewModel @Inject constructor(
                     startFileObserver(library.romRoot)
                 },
                 onFailure = { error ->
-                    if (!hadLibrary) _uiState.value = MainUiState.Error(error.message ?: "Scan failed")
+                    if (!hadLibrary || isNewRoot) _uiState.value = MainUiState.Error(error.message ?: "Scan failed")
                 }
             )
         }
@@ -226,6 +227,9 @@ class MainViewModel @Inject constructor(
     }
 
     fun clearCache() {
+        scanJob?.cancel()
+        fileObserverJob?.cancel()
+        repository.stopFileObserver()
         viewModelScope.launch {
             repository.clearCache()
             _uiState.value = MainUiState.Initial

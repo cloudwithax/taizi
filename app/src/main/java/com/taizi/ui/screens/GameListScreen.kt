@@ -48,15 +48,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.rememberAsyncImagePainter
-import coil.request.ImageRequest
+import coil.compose.AsyncImage
 import com.taizi.domain.model.Game
 import com.taizi.ui.theme.accentFor
 
@@ -297,17 +296,6 @@ internal fun GameCard(
     onClick: () -> Unit,
     onFavoriteClick: (Boolean) -> Unit
 ) {
-    val context = LocalContext.current
-    val painter = rememberAsyncImagePainter(
-        model = ImageRequest.Builder(context)
-            .data(game.boxArtPath)
-            .crossfade(true)
-            .build()
-    )
-    val hasArt = game.boxArtPath != null &&
-            painter.intrinsicSize.width > 0 &&
-            painter.intrinsicSize.height > 0
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -321,28 +309,29 @@ internal fun GameCard(
                 .clip(RoundedCornerShape(14.dp))
                 .background(MaterialTheme.colorScheme.surface)
         ) {
-            if (hasArt) {
-                androidx.compose.foundation.Image(
-                    painter = painter,
+            PlaceholderArt(title = game.displayName, accent = accent)
+            if (game.boxArtPath != null) {
+                AsyncImage(
+                    model = game.boxArtPath,
                     contentDescription = game.name,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    filterQuality = FilterQuality.Low
                 )
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(72.dp)
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    Color.Black.copy(alpha = 0.75f)
-                                ),
-                                startY = 200f
+                                    Color.Black.copy(alpha = 0.85f)
+                                )
                             )
                         )
                 )
-            } else {
-                PlaceholderArt(title = game.displayName, accent = accent)
             }
 
             Row(

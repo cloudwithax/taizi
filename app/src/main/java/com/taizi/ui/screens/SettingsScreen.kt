@@ -81,6 +81,7 @@ fun SettingsScreen(
                 TextButton(onClick = {
                     showClearCacheDialog = false
                     viewModel.clearCache()
+                    onNavigateUp()
                 }) { Text("Clear") }
             },
             dismissButton = {
