@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -25,10 +26,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -46,6 +49,17 @@ fun SearchScreen(
 ) {
     var query by remember { mutableStateOf("") }
     val allGames = remember { viewModel.getAllGames() }
+
+    val (initIndex, initOffset) = viewModel.getSearchScroll()
+    val gridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = initIndex,
+        initialFirstVisibleItemScrollOffset = initOffset
+    )
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+        }.collect { (i, off) -> viewModel.setSearchScroll(i, off) }
+    }
 
     val results = remember(query) {
         val q = query.trim()
@@ -105,6 +119,7 @@ fun SearchScreen(
             results.isEmpty() -> EmptyHint("No games match \"$query\"")
             else -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 128.dp),
+                state = gridState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),

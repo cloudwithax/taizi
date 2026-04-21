@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -33,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
@@ -58,13 +61,25 @@ data class LaunchableApp(
 
 @Composable
 fun AppDrawerScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: MainViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     var apps by remember { mutableStateOf<List<LaunchableApp>?>(null) }
 
     LaunchedEffect(Unit) {
         apps = withContext(Dispatchers.IO) { loadLaunchableApps(context.packageManager) }
+    }
+
+    val (initIndex, initOffset) = viewModel.getAppDrawerScroll()
+    val gridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = initIndex,
+        initialFirstVisibleItemScrollOffset = initOffset
+    )
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+        }.collect { (i, off) -> viewModel.setAppDrawerScroll(i, off) }
     }
 
     Column(
@@ -119,6 +134,7 @@ fun AppDrawerScreen(
 
             else -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 88.dp),
+                state = gridState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),

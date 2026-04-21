@@ -45,21 +45,28 @@ class MainViewModel @Inject constructor(
     private val _currentScreen = MutableStateFlow<Screen>(Screen.SystemList)
     val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
 
-    private val _selectedSystemPage = MutableStateFlow(0)
-    val selectedSystemPage: StateFlow<Int> = _selectedSystemPage.asStateFlow()
+    private var systemPagerPage: Int = 0
+    fun getSystemPagerPage(): Int = systemPagerPage
+    fun setSystemPagerPage(page: Int) { systemPagerPage = page }
 
-    fun setSelectedSystemPage(page: Int) {
-        _selectedSystemPage.value = page
+    private val gameListScroll = mutableMapOf<String, Pair<Int, Int>>()
+    fun getGameListScroll(systemId: String): Pair<Int, Int> =
+        gameListScroll[systemId] ?: (0 to 0)
+    fun setGameListScroll(systemId: String, index: Int, offset: Int) {
+        gameListScroll[systemId] = index to offset
     }
 
-    private val gameListScrollPositions = mutableMapOf<String, Int>()
+    private var searchScroll: Pair<Int, Int> = 0 to 0
+    fun getSearchScroll(): Pair<Int, Int> = searchScroll
+    fun setSearchScroll(index: Int, offset: Int) { searchScroll = index to offset }
 
-    fun getGameListScrollPosition(systemId: String): Int =
-        gameListScrollPositions[systemId] ?: 0
+    private var appDrawerScroll: Pair<Int, Int> = 0 to 0
+    fun getAppDrawerScroll(): Pair<Int, Int> = appDrawerScroll
+    fun setAppDrawerScroll(index: Int, offset: Int) { appDrawerScroll = index to offset }
 
-    fun setGameListScrollPosition(systemId: String, index: Int) {
-        gameListScrollPositions[systemId] = index
-    }
+    private var settingsScroll: Pair<Int, Int> = 0 to 0
+    fun getSettingsScroll(): Pair<Int, Int> = settingsScroll
+    fun setSettingsScroll(index: Int, offset: Int) { settingsScroll = index to offset }
 
     private val _scanProgress = MutableStateFlow(ScanProgress())
     val scanProgress: StateFlow<ScanProgress> = _scanProgress.asStateFlow()

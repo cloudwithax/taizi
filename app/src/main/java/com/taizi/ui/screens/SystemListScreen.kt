@@ -41,11 +41,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +65,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.taizi.domain.model.System
 import com.taizi.ui.theme.SystemAccent
 import com.taizi.ui.theme.accentFor
@@ -77,14 +80,22 @@ fun SystemListScreen(
     onSettingsClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onAppsClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: MainViewModel = hiltViewModel()
 ) {
     if (systems.isEmpty()) {
         EmptySystems(modifier = modifier)
         return
     }
 
-    val pagerState = rememberPagerState(pageCount = { systems.size })
+    val pagerState = rememberPagerState(
+        initialPage = viewModel.getSystemPagerPage().coerceIn(0, systems.size - 1),
+        pageCount = { systems.size }
+    )
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }
+            .collect { viewModel.setSystemPagerPage(it) }
+    }
     val focused = systems.getOrNull(pagerState.currentPage) ?: systems.first()
     val focusedAccent = accentFor(focused.id)
 

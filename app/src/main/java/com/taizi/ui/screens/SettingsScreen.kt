@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons as MaterialIcons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -60,6 +61,17 @@ fun SettingsScreen(
     var showClearCacheDialog by remember { mutableStateOf(false) }
     val scrapeStatus by viewModel.scrapeStatus.collectAsState()
 
+    val (initIndex, initOffset) = viewModel.getSettingsScroll()
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = initIndex,
+        initialFirstVisibleItemScrollOffset = initOffset
+    )
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { (i, off) -> viewModel.setSettingsScroll(i, off) }
+    }
+
     if (showClearCacheDialog) {
         AlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
@@ -90,6 +102,7 @@ fun SettingsScreen(
         }
     ) { paddingValues ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
