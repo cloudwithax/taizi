@@ -3,8 +3,10 @@ package com.taizi.data.repository
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.FileObserver
+import android.provider.DocumentsContract
 import android.util.Log
 import androidx.core.content.FileProvider
 import com.google.gson.Gson
@@ -474,26 +476,7 @@ class LibraryRepositoryImpl(
             val pm = context.packageManager
             pm.getPackageInfo(packageName, 0) // Will throw if not installed
 
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                // RetroArch
-                if (system.emulatorType == "retroarch") {
-                    action = "org.libretro.RUN_GAME"
-                    `package` = packageName
-                    putExtra("core", system.core)
-                    putExtra("rom", game.path)
-                } else {
-                    // Standalone emulator
-                    `package` = packageName
-                    data = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        File(game.path)
-                    )
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-            }
-
+            val intent = buildLaunchIntent(system, packageName, game)
             context.startActivity(intent)
 
             // Update play count
@@ -503,6 +486,65 @@ class LibraryRepositoryImpl(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun buildLaunchIntent(system: System, packageName: String, game: Game): Intent {
+        if (system.emulatorType == "RetroArch") {
+            return Intent("org.libretro.RUN_GAME").apply {
+                `package` = packageName
+                putExtra("core", system.core)
+                putExtra("rom", game.path)
+            }
+        }
+        // Standalones (Flycast, DraStic, PPSSPP, Mupen64Plus, Azahar, ...)
+        // all accept a SAF document URI from externalstorage.documents with
+        // a MIME type. Azahar's filter pins "application/octet-stream", the
+        // others accept any wild type, so we use octet-stream for all.
+        val safUri = buildExternalStorageDocumentUri(game.path)
+        return Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(safUri, "application/octet-stream")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            when (system.emulatorType) {
+                "Flycast" -> {
+                    // Flycast's filter only declares scheme="file" so content://
+                    // URIs won't match through filter resolution. Target the
+                    // activity directly — its native AndroidStorage only accepts
+                    // SAF URIs anyway.
+                    setClassName(packageName, "com.flycast.emulator.MainActivity")
+                }
+                "DraStic" -> {
+                    // DraStic's filter only matches paths ending in .nds, so
+                    // zipped ROMs fail filter resolution. Target the activity
+                    // directly — it unzips .zip/.7z/.rar internally via its
+                    // unzip_cache path. CLEAR_TASK ensures a fresh onCreate
+                    // re-parses the new ROM when DraStic is already running.
+                    setClassName(packageName, "com.dsemu.drastic.DraSticActivity")
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                }
+                else -> {
+                    `package` = packageName
+                }
+            }
+        }
+    }
+
+    private fun buildExternalStorageDocumentUri(filePath: String): Uri {
+        // /storage/emulated/0/<rest>      -> primary:<rest>
+        // /storage/<volume-id>/<rest>     -> <volume-id>:<rest>
+        val match = Regex("""^/storage/([^/]+)/(.*)$""").find(filePath)
+            ?: throw IllegalArgumentException("Path not under /storage: $filePath")
+        val rawVolume = match.groupValues[1]
+        val rest = match.groupValues[2]
+        val (volume, relative) = if (rawVolume == "emulated") {
+            "primary" to rest.substringAfter("0/", rest)
+        } else {
+            rawVolume to rest
+        }
+        return DocumentsContract.buildDocumentUri(
+            "com.android.externalstorage.documents",
+            "$volume:$relative"
+        )
     }
 
     override suspend fun updateGamePlayStats(
@@ -803,30 +845,50 @@ class LibraryRepositoryImpl(
         "com.retroarch.ra32"
     )
 
+    // Map of system id -> ordered list of (package, frontend label) pairs.
+    // First installed entry wins. Label is stored verbatim as emulatorType and
+    // also drives per-frontend launch behavior in launchGame.
     private val standaloneEmulators: Map<String, List<Pair<String, String>>> = mapOf(
         "psx" to listOf(
-            "com.github.stenzek.duckstation" to "standalone",
-            "org.duckstation.android" to "standalone"
+            "com.github.stenzek.duckstation" to "DuckStation",
+            "org.duckstation.android" to "DuckStation"
+        ),
+        "ps2" to listOf(
+            "xyz.aethersx2.android" to "AetherSX2",
+            "xyz.netherssx2.android" to "NetherSX2"
         ),
         "psp" to listOf(
-            "org.ppsspp.ppsspp" to "standalone",
-            "org.ppsspp.ppssppgold" to "standalone"
+            "org.ppsspp.ppsspp" to "PPSSPP",
+            "org.ppsspp.ppssppgold" to "PPSSPP"
         ),
         "nds" to listOf(
-            "com.dsemu.drastic" to "standalone",
-            "me.magnum.melonds" to "standalone"
+            "com.dsemu.drastic" to "DraStic",
+            "me.magnum.melonds" to "melonDS"
+        ),
+        "3ds" to listOf(
+            "org.azahar_emu.azahar" to "Azahar",
+            "org.citra.citra_emu" to "Citra"
+        ),
+        "gamecube" to listOf(
+            "org.dolphinemu.dolphinemu" to "Dolphin"
+        ),
+        "wii" to listOf(
+            "org.dolphinemu.dolphinemu" to "Dolphin"
         ),
         "dc" to listOf(
-            "com.flycast.emulator" to "standalone",
-            "io.recompiled.redream" to "standalone"
+            "com.flycast.emulator" to "Flycast",
+            "io.recompiled.redream" to "Redream"
+        ),
+        "naomi" to listOf(
+            "com.flycast.emulator" to "Flycast"
         ),
         "n64" to listOf(
-            "org.mupen64plusae.v3.fzurita" to "standalone",
-            "org.mupen64plusae.v3.alpha" to "standalone"
+            "org.mupen64plusae.v3.fzurita" to "Mupen64Plus FZ",
+            "org.mupen64plusae.v3.alpha" to "Mupen64Plus AE"
         ),
         "saturn" to listOf(
-            "org.uoyabause.urern" to "standalone",
-            "org.devmiyax.yabasanshiro" to "standalone"
+            "org.uoyabause.urern" to "YabaSanshiro",
+            "org.devmiyax.yabasanshiro" to "YabaSanshiro"
         )
     )
 
@@ -858,7 +920,7 @@ class LibraryRepositoryImpl(
         val raPackage = findInstalledRetroArch()
         if (raPackage != null) {
             return EmulatorConfig(
-                type = "retroarch",
+                type = "RetroArch",
                 packageName = raPackage,
                 core = def.core
             )
@@ -866,12 +928,12 @@ class LibraryRepositoryImpl(
 
         return when (def.emulator) {
             "retroarch" -> EmulatorConfig(
-                type = "retroarch",
+                type = "RetroArch",
                 packageName = retroArchPackages.first(),
                 core = def.core
             )
             else -> EmulatorConfig(
-                type = "standalone",
+                type = standalones?.firstOrNull()?.second ?: "RetroArch",
                 packageName = standalones?.firstOrNull()?.first ?: retroArchPackages.first(),
                 core = null
             )

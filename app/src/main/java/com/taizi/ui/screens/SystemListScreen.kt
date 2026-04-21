@@ -33,7 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,7 +61,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.taizi.domain.model.BiosStatus
 import com.taizi.domain.model.System
 import com.taizi.ui.theme.SystemAccent
 import com.taizi.ui.theme.accentFor
@@ -299,9 +297,6 @@ private fun SystemTile(
                         color = Color.White
                     )
                 }
-                if (system.biosStatus == BiosStatus.MISSING) {
-                    BiosChip()
-                }
             }
 
             Column(modifier = Modifier.fillMaxWidth(0.55f)) {
@@ -321,35 +316,6 @@ private fun SystemTile(
                     color = Color.White.copy(alpha = 0.85f)
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun BiosChip() {
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = Color.Black.copy(alpha = 0.45f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Warning,
-                contentDescription = null,
-                tint = Color(0xFFFFC857),
-                modifier = Modifier.size(12.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "BIOS",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                ),
-                color = Color(0xFFFFC857)
-            )
         }
     }
 }
@@ -492,14 +458,6 @@ private fun FocusedSystemMeta(system: System) {
             value = system.romCount.toString(),
             accent = accent.primary
         )
-        if (system.biosStatus == BiosStatus.MISSING) {
-            Spacer(modifier = Modifier.width(12.dp))
-            MetaPill(
-                label = "Status",
-                value = "BIOS needed",
-                accent = MaterialTheme.colorScheme.secondary
-            )
-        }
     }
 }
 
