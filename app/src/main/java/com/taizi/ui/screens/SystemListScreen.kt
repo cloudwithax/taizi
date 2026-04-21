@@ -32,6 +32,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -73,6 +75,8 @@ fun SystemListScreen(
     onSystemClick: (System) -> Unit,
     onScanClick: () -> Unit,
     onSettingsClick: () -> Unit = {},
+    onSearchClick: () -> Unit = {},
+    onAppsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (systems.isEmpty()) {
@@ -96,6 +100,8 @@ fun SystemListScreen(
                 totalSystems = systems.size,
                 totalGames = systems.sumOf { it.romCount },
                 onScanClick = onScanClick,
+                onSearchClick = onSearchClick,
+                onAppsClick = onAppsClick,
                 onSettingsClick = onSettingsClick
             )
 
@@ -139,6 +145,8 @@ private fun LibraryHeader(
     totalSystems: Int,
     totalGames: Int,
     onScanClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onAppsClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
     Row(
@@ -166,6 +174,22 @@ private fun LibraryHeader(
             Icon(
                 imageVector = Icons.Filled.Refresh,
                 contentDescription = "Rescan library",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        CircularIconButton(onClick = onSearchClick) {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = "Search",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        CircularIconButton(onClick = onAppsClick) {
+            Icon(
+                imageVector = Icons.Filled.Apps,
+                contentDescription = "Apps",
                 tint = MaterialTheme.colorScheme.onSurface
             )
         }

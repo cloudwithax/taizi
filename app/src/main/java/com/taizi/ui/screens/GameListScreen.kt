@@ -278,7 +278,7 @@ private fun SearchField(
 }
 
 @Composable
-private fun GameCard(
+internal fun GameCard(
     game: Game,
     accent: Color,
     onClick: () -> Unit,

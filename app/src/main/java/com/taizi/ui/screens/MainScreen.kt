@@ -111,7 +111,9 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                                 systems = state.library.systems,
                                 onSystemClick = { viewModel.navigateToSystem(it.id) },
                                 onScanClick = { viewModel.triggerFullScan() },
-                                onSettingsClick = { viewModel.setScreen(Screen.Settings) }
+                                onSettingsClick = { viewModel.setScreen(Screen.Settings) },
+                                onSearchClick = { viewModel.setScreen(Screen.Search) },
+                                onAppsClick = { viewModel.setScreen(Screen.AppDrawer) }
                             )
                             is MainUiState.Error -> ErrorContent(
                                 message = state.message,
@@ -131,6 +133,16 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                     is Screen.Settings -> SettingsScreen(
                         viewModel = viewModel,
                         onNavigateUp = viewModel::navigateBack
+                    )
+                    is Screen.Search -> SearchScreen(
+                        viewModel = viewModel,
+                        onGameClick = { game ->
+                            viewModel.launchGame(game)
+                        },
+                        onBack = viewModel::navigateBack
+                    )
+                    is Screen.AppDrawer -> AppDrawerScreen(
+                        onBack = viewModel::navigateBack
                     )
                     else -> Unit
                 }
