@@ -42,9 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 @Composable
 fun StatusBar(modifier: Modifier = Modifier) {
@@ -52,7 +50,7 @@ fun StatusBar(modifier: Modifier = Modifier) {
     var wifiConnected by remember { mutableStateOf(isWifiConnected(context)) }
     var batteryLevel by remember { mutableIntStateOf(100) }
     var isCharging by remember { mutableStateOf(false) }
-    var clock by remember { mutableStateOf(currentClock()) }
+    var clock by remember { mutableStateOf(currentClock(context)) }
 
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -66,7 +64,7 @@ fun StatusBar(modifier: Modifier = Modifier) {
                         status == BatteryManager.BATTERY_STATUS_FULL
             }
             wifiConnected = isWifiConnected(context)
-            clock = currentClock()
+            clock = currentClock(context)
             delay(15_000)
         }
     }
@@ -127,8 +125,8 @@ fun StatusBar(modifier: Modifier = Modifier) {
     }
 }
 
-private fun currentClock(): String =
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+private fun currentClock(context: Context): String =
+    android.text.format.DateFormat.getTimeFormat(context).format(Date())
 
 private fun batteryIcon(level: Int): ImageVector = when {
     level >= 85 -> Icons.Outlined.BatteryFull
