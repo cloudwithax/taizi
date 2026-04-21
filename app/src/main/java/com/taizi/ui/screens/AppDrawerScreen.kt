@@ -3,8 +3,11 @@ package com.taizi.ui.screens
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
+import android.net.Uri
+import android.provider.Settings
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,11 +26,13 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,6 +85,74 @@ fun AppDrawerScreen(
         snapshotFlow {
             gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
         }.collect { (i, off) -> viewModel.setAppDrawerScroll(i, off) }
+    }
+
+    var menuApp by remember { mutableStateOf<LaunchableApp?>(null) }
+    var activitiesApp by remember { mutableStateOf<LaunchableApp?>(null) }
+
+    if (menuApp != null) {
+        val app = menuApp!!
+        AlertDialog(
+            onDismissRequest = { menuApp = null },
+            title = { Text(app.label) },
+            text = {
+                Column {
+                    TextButton(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_DELETE).apply {
+                                data = Uri.parse("package:${app.packageName}")
+                            }
+                            runCatching { context.startActivity(intent) }
+                            menuApp = null
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Uninstall", modifier = Modifier.fillMaxWidth())
+                    }
+                    TextButton(
+                        onClick = {
+                            activitiesApp = app
+                            menuApp = null
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("View Activities", modifier = Modifier.fillMaxWidth())
+                    }
+                    TextButton(
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.parse("package:${app.packageName}")
+                            }
+                            runCatching { context.startActivity(intent) }
+                            menuApp = null
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Application Info", modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { menuApp = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    val actApp = activitiesApp
+    if (actApp != null) {
+        ActivitiesDialog(
+            packageName = actApp.packageName,
+            packageManager = context.packageManager,
+            onDismiss = { activitiesApp = null },
+            onLaunch = { activityName ->
+                val intent = Intent(Intent.ACTION_MAIN)
+                    .addCategory(Intent.CATEGORY_LAUNCHER)
+                    .setClassName(actApp.packageName, activityName)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(intent) }
+            }
+        )
     }
 
     Column(
@@ -149,7 +222,8 @@ fun AppDrawerScreen(
                                 .setClassName(app.packageName, app.activityName)
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             runCatching { context.startActivity(intent) }
-                        }
+                        },
+                        onLongClick = { menuApp = app }
                     )
                 }
             }
@@ -157,8 +231,9 @@ fun AppDrawerScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AppTile(app: LaunchableApp, onClick: () -> Unit) {
+private fun AppTile(app: LaunchableApp, onClick: () -> Unit, onLongClick: () -> Unit) {
     val painter = rememberAsyncImagePainter(
         model = ImageRequest.Builder(LocalContext.current)
             .data(app.icon)
@@ -169,7 +244,10 @@ private fun AppTile(app: LaunchableApp, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .clickable { onClick() }
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .padding(vertical = 10.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -199,6 +277,57 @@ private fun AppTile(app: LaunchableApp, onClick: () -> Unit) {
     }
 }
 
+@Composable
+private fun ActivitiesDialog(
+    packageName: String,
+    packageManager: PackageManager,
+    onDismiss: () -> Unit,
+    onLaunch: (String) -> Unit
+) {
+    var activities by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+
+    LaunchedEffect(packageName) {
+        activities = withContext(Dispatchers.IO) {
+            try {
+                val pkgInfo = packageManager.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES)
+                pkgInfo.activities?.map {
+                    (it.loadLabel(packageManager)?.toString() ?: it.name) to it.name
+                }?.sortedBy { it.first } ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Activities") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (activities.isEmpty()) {
+                    Text("No activities found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    activities.forEach { (label, name) ->
+                        TextButton(
+                            onClick = {
+                                onLaunch(name)
+                                onDismiss()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(label, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
 private fun loadLaunchableApps(pm: PackageManager): List<LaunchableApp> {
     val seen = HashSet<String>()
     val combined = mutableListOf<android.content.pm.ResolveInfo>()
@@ -221,4 +350,3 @@ private fun loadLaunchableApps(pm: PackageManager): List<LaunchableApp> {
         }
         .sortedBy { it.label.lowercase() }
 }
-

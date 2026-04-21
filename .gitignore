@@ -114,3 +114,4 @@ lint/tmp/
 *.zip
 *.tar.gz
 *.rar
+.claude/

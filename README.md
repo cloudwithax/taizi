@@ -1,65 +1,83 @@
-# Taizi
+<p align="center">
+  <img src="icon.png" width="128" height="128" alt="Taizi Logo">
+</p>
 
-A lightweight Android launcher for RG DS devices running Android 14.
+<h1 align="center">Taizi</h1>
 
-**Inspired by Daijisho and Rocknix/Jelos ROM organization**.
+<p align="center">
+  <b>A lightweight launcher & ROM library for Android handhelds</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/cloudwithax/taizi/releases/latest">
+    <img src="https://img.shields.io/github/v/release/cloudwithax/taizi?logo=github&style=flat-square" alt="Release">
+  </a>
+  <a href="https://github.com/cloudwithax/taizi/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/cloudwithax/taizi?style=flat-square" alt="License">
+  </a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white&style=flat-square" alt="Android 8.0+">
+  <img src="https://img.shields.io/badge/arch-ARM64-ff69b4?style=flat-square" alt="ARM64">
+  <img src="https://img.shields.io/badge/Kotlin-100%25-7F52FF?logo=kotlin&logoColor=white&style=flat-square" alt="Kotlin">
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#screenshots">Screenshots</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#rom-organization">ROMs</a> •
+  <a href="#building">Building</a>
+</p>
+
+---
 
 ## Features
 
-- Rocknix-style "one folder = one system" ROM scanning
-- Automatic system detection from folder names
-- BIOS status checking
-- Multi-disc game support (.m3u, .cue)
-- Real-time library synchronization via FileObserver
-- Optional Screenscraper.fr integration for box art
-- WiFi and battery status indicators
-- Dual-screen support (for RG DS)
-- Home launcher mode (replaces stock launcher)
-- Extremely lightweight (< 8MB APK)
+- **Rocknix-style library** — one folder = one system, auto-detected from 100+ known platforms
+- **Adaptive launcher** — replaces your stock home screen with a game-focused app drawer
+- **Box art scraping** — built-in IGDB metadata & cover download with Room database caching
+- **Smart resuming** — skips ROMs that already have cached box art on disk
+- **Multi-disc support** — `.m3u` playlists and multi-file games handled gracefully
+- **BIOS checking** — warns when required firmware is missing
+- **Real-time sync** — `FileObserver` watches your ROM folders for live updates
+- **Dual-screen ready** — built for RG DS and similar clamshell Android handhelds
+- **Tiny footprint** — ~4 MB APK, no bloat
 
-## Requirements
+## Screenshots
 
-- Android 7.0 (API 24) or higher (targeting Android 14/API 35)
-- RG DS or similar Android handheld (ARM64)
-- ROMs organized in folders: `/storage/roms/gb/`, `/storage/roms/gba/`, etc.
+<p align="center">
+  <img src="screenshots/main.png" width="640" alt="Library">
+  <br>
+  <em>Library — browse systems with artwork and metadata</em>
+</p>
 
-## Building
+<p align="center">
+  <img src="screenshots/games.png" width="640" alt="Game List">
+  <br>
+  <em>Game list — view ROMs per system with favorites & search</em>
+</p>
 
-### Prerequisites
+<p align="center">
+  <img src="screenshots/apps.png" width="640" alt="App Drawer">
+  <br>
+  <em>App drawer — launch installed apps with long-press actions</em>
+</p>
 
-- Android Studio Hedgehog (2023.1.1) or newer
-- Android SDK with API 35
-- NDK r26+ (for ARM64)
-- Gradle 8.4+
-
-### Build Steps
-
-1. Open this project in Android Studio
-2. Let Gradle sync and download dependencies
-3. Create a debug keystore or configure release signing
-4. Build APK: `Build > Build Bundle(s) / APK(s) > Build APK(s)`
-
-Or command line:
-```bash
-./gradlew assembleDebug
-```
-
-### First Build Note
-
-The project uses Hilt for dependency injection and Compose for UI. On first build, Gradle will download required components. Ensure you have Google's Maven repository configured.
+<p align="center">
+  <img src="screenshots/settings.png" width="640" alt="Settings">
+  <br>
+  <em>Settings — configure ROM root, scraping, and cache</em>
+</p>
 
 ## Installation
 
-1. Enable "Unknown Sources" on your RG DS device
-2. Transfer the APK to the device
-3. Install and open the app
-4. On first launch, you'll be prompted to select your ROM root folder (e.g., `/storage/roms/`)
-5. The app will scan your library and show detected systems
-6. Set Taizi as your default home/launcher app if desired
+1. Download the latest APK from [Releases](https://github.com/cloudwithax/taizi/releases)
+2. Enable **Install unknown apps** on your device
+3. Install and launch — point it at your ROM root folder (e.g. `/storage/roms/`)
+4. Set Taizi as your **default home app** when prompted
 
 ## ROM Organization
 
-Taizi follows the Rocknix/Jelos folder structure:
+Taizi follows the Rocknix / JELOS folder convention:
 
 ```
 /storage/roms/
@@ -79,126 +97,86 @@ Taizi follows the Rocknix/Jelos folder structure:
 ├── dc/
 ├── mame/
 ├── pce/
-└── bios/  ← BIOS files (optional)
+└── bios/              ← optional BIOS folder
     ├── scph1001.bin
     └── gb_bios.bin
 ```
 
-Each immediate subdirectory of `/storage/roms/` is treated as a system. Folder names are automatically mapped to known systems (case-insensitive). Unknown folders will prompt you to map them.
+Unknown folders can be mapped to known systems in Settings.
 
-## Emulator Configuration
+## Supported Systems
 
-Taizi requires emulators to be installed separately. Supported emulators include:
+Over **100 systems** are recognized out of the box, including:
 
-- **RetroArch** (`com.retroarch`) - multi-system via libretro cores
-- **DuckStation** (`com.github.stenzek.duckstation`) - PlayStation
-- **PPSSPP** (`org.ppsspp.ppsspp`) - PSP
-- **DraStic** (`com.draustinus.drastic`) - NDS
-- **Flycast** (`com.flycast`) - Dreamcast
+| Nintendo | Sony | Sega | Arcade | Other |
+|----------|------|------|--------|-------|
+| Game Boy | PlayStation | Genesis / Mega Drive | MAME | PICO-8 |
+| Game Boy Advance | PlayStation 2 | Master System | FinalBurn Neo | ScummVM |
+| NES / Famicom | PSP | Game Gear | Capcom CPS-1/2/3 | DOS |
+| SNES / Super Famicom | — | Saturn | Neo Geo | 3DO |
+| Nintendo 64 | — | Dreamcast / NAOMI | — | Atari 2600/5200/7800 |
+| GameCube / Wii | — | Mega CD / 32X | — | WonderSwan |
+| Nintendo DS / 3DS | — | — | — | ZX Spectrum |
+| Virtual Boy | — | — | — | Amiga |
 
-In Settings, you can configure which emulator to use for each system.
+## Emulator Support
 
-Launching uses Android intents. For RetroArch, Taizi sends the `org.libretro.RUN_GAME` intent with core and ROM path extras.
+Taizi launches games via standard Android intents. Supported frontends:
 
-## BIOS Files
+| Emulator | Systems | Package |
+|----------|---------|---------|
+| **RetroArch** | Most (via libretro cores) | `com.retroarch.aarch64` |
+| **DuckStation** | PlayStation | `com.github.stenzek.duckstation` |
+| **PPSSPP** | PSP | `org.ppsspp.ppsspp` |
+| **DraStic** | Nintendo DS | `com.dsemu.drastic` |
+| **Flycast** | Dreamcast / NAOMI | `com.flycast.emulator` |
+| **melonDS** | Nintendo DS | `me.magnum.melonds` |
+| **Azahar / Citra** | Nintendo 3DS | `org.azahar_emu.azahar` |
+| **Dolphin** | GameCube / Wii | `org.dolphinemu.dolphinemu` |
+| **Mupen64Plus FZ** | Nintendo 64 | `org.mupen64plusae.v3.fzurita` |
+| **AetherSX2 / NetherSX2** | PlayStation 2 | `xyz.aethersx2.android` |
 
-Some systems require BIOS files to function. Place BIOS files in `/storage/roms/bios/` following the structure:
+Per-system emulator selection is configurable in Settings.
 
+## Building
+
+### Prerequisites
+
+- Android Studio Hedgehog (2023.1.1) or newer
+- Android SDK API 35
+- NDK r26+ (ARM64)
+- Gradle 8.4+
+
+### Build
+
+```bash
+./gradlew assembleRelease
 ```
-/storage/roms/bios/
-├── psx/
-│   ├── scph1001.bin
-│   └── scph5502.bin
-├── gb/
-│   └── gb_bios.bin
-├── gba/
-│   └── gba_bios.bin
-└── dc/
-    ├── dc_boot.bin
-    └── dc_flash.bin
-```
 
-Taizi will check BIOS status and display warnings for missing firmware.
+The release APK will be at `app/build/outputs/apk/release/app-release.apk`.
 
-## Multi-Disc Games
+## Scraping
 
-- **.m3u files**: Automatically treated as playlist; all listed discs are presented as a single game entry
-- **.cue files**: Multiple .cue files with similar names are grouped
-- Disc selector available in game details
+1. Go to **Settings → Scraping**
+2. Enter your [IGDB](https://igdb.com) credentials (free account required)
+3. Tap **Scrape All** or scrape per-system
 
-## Real-Time Updates
-
-With FileObserver enabled, Taizi monitors your ROM folders and automatically updates the library when you add, remove, or modify ROM files (500ms debounce).Changes are detected instantly without manual rescan.
-
-## Screenscraper Integration
-
-To download box art and metadata:
-
-1. Create a free account at [screenscraper.fr](https://screenscraper.fr)
-2. In Taizi Settings > Scraping, enter your username and password
-3. Enable scraping
-4. Use "Scrape" option in system or game menus
-
-Note: Screenscraper has rate limits. Scraping large libraries may take time.
-
-## Dual-Screen Support (RG DS)
-
-Taizi detects the secondary display on RG DS. Options:
-
-- **Mirror**: Same content on both screens
-- **Extended**: List on primary (bottom), details/preview on secondary (top)
-- **Disabled**: Use only primary screen
-
-Configurable in Settings.
-
-## Performance Optimizations
-
-- Minimal APK size (~8MB) by removing unused resources and locales
-- LRU memory cache for images (50MB max)
-- Images downsampled to device resolution (640×480 max)
-- Background scanning on `Dispatchers.IO`
-- Lazy loading with Compose LazyColumn/LazyVerticalGrid
-- No large heap request
-
-Typical memory usage: 60-100MB idle, 150-200MB with large library.
-
-## Limitations
-
-- No online game database queries on launch (only on manual scrape)
-- No video previews (to save storage/CPU)
-- No complex widget support beyond simple launcher
-- Requires manual ROM organization (no auto-sorting)
-- No game state management (save states are handled by emulators)
+Scraped box art and metadata are stored in a local Room database (`taizi_boxart.db`) that is automatically removed on app uninstall.
 
 ## Troubleshooting
 
-**ROMs not showing?**
-- Ensure your ROM root is correctly set in Settings
-- Reboot to force a full scan
-- Check that folder names match known systems (or map them in Settings)
-
-**Game won't launch?**
-- Verify the emulator app is installed
-- Some emulators (e.g., DraStic) are paid - ensure you own them
-- Check that the ROM file format is supported by that emulator
-
-**No box art?**
-- Place images in `imgs/{system}/` next to your ROMs (named exactly as ROM file)
-- Or use Screenscraper integration
-
-**FileObserver not working?**
-- On some Android versions, inotify has limits. If you add many files at once, they may not be detected. Perform a manual rescan.
+| Problem | Fix |
+|---------|-----|
+| ROMs not showing | Check ROM root path in Settings; reboot to force full scan |
+| Game won't launch | Verify the emulator is installed; check ROM format support |
+| No box art | Use the scraper or place images in `imgs/{system}/` next to ROMs |
+| FileObserver stops | Android `inotify` limits may be exceeded; run a manual rescan |
 
 ## License
 
-MIT License - see LICENSE file.
+MIT License — see [LICENSE](LICENSE).
 
 ## Credits
 
-- Inspired by [Daijisho](https://github.com/onmyway133/daijishou) and [Rocknix/Jelos](https://rocknix.org/)
-- Uses [Compose](https://developer.android.com/jetpack/compose), [Coil](https://coil-kt.github.io/coil/), [Gson](https://github.com/google/gson)
-- Icons from [Material Icons Extended](https://fonts.google.com/icons)
-
----
-
-**Note**: This is a work in progress. Expect bugs and missing features.
+- Inspired by [Daijishō](https://github.com/magneticchen/Daijishou) and [ROCKNIX](https://rocknix.org/)
+- Built with [Jetpack Compose](https://developer.android.com/jetpack/compose), [Coil](https://coil-kt.github.io/coil/), [Room](https://developer.android.com/jetpack/androidx/releases/room), [Hilt](https://dagger.dev/hilt/)
