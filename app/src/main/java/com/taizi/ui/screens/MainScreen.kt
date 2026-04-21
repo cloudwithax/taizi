@@ -2,6 +2,7 @@ package com.taizi.ui.screens
 
 import android.net.Uri
 import android.os.Environment
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -85,6 +86,10 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
         uri?.let { treeUriToFilePath(it) }?.let(viewModel::triggerFullScan)
     }
 
+    BackHandler {
+        if (currentScreen !is Screen.SystemList) viewModel.navigateBack()
+    }
+
     TaiziTheme {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
@@ -102,13 +107,13 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                 when (currentScreen) {
                     is Screen.SystemList -> {
                         when (val state = uiState) {
-                            MainUiState.Loading -> ScanningContent(scanProgress)
+                            MainUiState.Loading -> Unit
                             MainUiState.Initial -> InitialSetupContent(
                                 onSelectFolder = { folderPickerLauncher.launch(null) }
                             )
                             MainUiState.Scanning -> ScanningContent(scanProgress)
                             is MainUiState.LibraryLoaded -> SystemListScreen(
-                                systems = state.library.systems,
+                                systems = viewModel.systemsForDisplay(state.library),
                                 onSystemClick = { viewModel.navigateToSystem(it.id) },
                                 onScanClick = { viewModel.triggerFullScan() },
                                 onSettingsClick = { viewModel.setScreen(Screen.Settings) },

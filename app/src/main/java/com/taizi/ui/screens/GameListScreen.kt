@@ -37,6 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,8 +68,9 @@ fun GameListScreen(
     onGameClick: (Game) -> Unit,
     onBack: () -> Unit
 ) {
-    val system = viewModel.getSystemById(systemId)
-    val games = viewModel.getGamesForSystem(systemId)
+    val uiState by viewModel.uiState.collectAsState()
+    val system = remember(uiState, systemId) { viewModel.getSystemById(systemId) }
+    val games = remember(uiState, systemId) { viewModel.getGamesForSystem(systemId) }
     val accent = accentFor(systemId)
 
     var searchQuery by remember { mutableStateOf("") }

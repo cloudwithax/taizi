@@ -85,6 +85,13 @@ class MainViewModel @Inject constructor(
                 _uiState.value = MainUiState.Initial
             }
         }
+        viewModelScope.launch {
+            repository.getLibrary().collect { lib ->
+                if (lib.romRoot.isNotEmpty() && _uiState.value is MainUiState.LibraryLoaded) {
+                    _uiState.value = MainUiState.LibraryLoaded(lib)
+                }
+            }
+        }
     }
 
     fun setScreen(screen: Screen) {
@@ -102,11 +109,12 @@ class MainViewModel @Inject constructor(
     fun triggerFullScan(romRoot: String? = null) {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            _uiState.value = MainUiState.Scanning
+            val hadLibrary = _uiState.value is MainUiState.LibraryLoaded
+            if (!hadLibrary) _uiState.value = MainUiState.Scanning
 
             val root = romRoot ?: repository.getLibrary().value.romRoot
             if (root.isEmpty()) {
-                _uiState.value = MainUiState.Error("No ROM root configured")
+                if (!hadLibrary) _uiState.value = MainUiState.Error("No ROM root configured")
                 return@launch
             }
 
@@ -120,7 +128,7 @@ class MainViewModel @Inject constructor(
                     startFileObserver(library.romRoot)
                 },
                 onFailure = { error ->
-                    _uiState.value = MainUiState.Error(error.message ?: "Scan failed")
+                    if (!hadLibrary) _uiState.value = MainUiState.Error(error.message ?: "Scan failed")
                 }
             )
         }
@@ -152,15 +160,43 @@ class MainViewModel @Inject constructor(
     }
 
     fun getSystemById(systemId: String): System? {
+        if (systemId == FAVORITES_SYSTEM_ID) return buildFavoritesSystem(repository.getLibrary().value)
         return repository.getLibrary().value.systems.find { system: System -> system.id == systemId }
     }
 
     fun getGamesForSystem(systemId: String): List<Game> {
+        if (systemId == FAVORITES_SYSTEM_ID) {
+            return repository.getLibrary().value.gamesBySystem.values.flatten().filter { it.favorite }
+        }
         return repository.getLibrary().value.gamesBySystem[systemId] ?: emptyList()
     }
 
     fun getAllGames(): List<Game> {
         return repository.getLibrary().value.gamesBySystem.values.flatten()
+    }
+
+    fun systemsForDisplay(library: Library): List<System> {
+        val fav = buildFavoritesSystem(library) ?: return library.systems
+        return listOf(fav) + library.systems
+    }
+
+    private fun buildFavoritesSystem(library: Library): System? {
+        val count = library.gamesBySystem.values.sumOf { games -> games.count { it.favorite } }
+        if (count == 0) return null
+        return System(
+            id = FAVORITES_SYSTEM_ID,
+            name = "Favorites",
+            path = "",
+            romCount = count,
+            emulatorType = "",
+            emulatorPackage = null,
+            core = null,
+            lastScanned = 0L
+        )
+    }
+
+    companion object {
+        const val FAVORITES_SYSTEM_ID = "__favorites__"
     }
 
     val scrapeStatus: StateFlow<ScrapeStatus> = BoxArtScrapeService.status

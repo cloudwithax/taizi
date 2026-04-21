@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -43,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -70,6 +72,7 @@ import com.taizi.domain.model.System
 import com.taizi.ui.theme.SystemAccent
 import com.taizi.ui.theme.accentFor
 import com.taizi.ui.theme.imageFor
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 @Composable
@@ -272,7 +275,19 @@ private fun SystemTile(
             )
             .clickable { onClick() }
     ) {
-        if (imageRes != null) {
+        if (system.id == MainViewModel.FAVORITES_SYSTEM_ID) {
+            Icon(
+                imageVector = Icons.Filled.Favorite,
+                contentDescription = null,
+                tint = accent.primary,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.55f)
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp, top = 20.dp, bottom = 20.dp)
+                    .graphicsLayer { alpha = 0.95f }
+            )
+        } else if (imageRes != null) {
             Image(
                 painter = painterResource(id = imageRes),
                 contentDescription = null,
@@ -371,7 +386,11 @@ private fun PagerDots(
     val anchor = (windowSize - 1) / 2
     val maxStart = (count - windowSize).coerceAtLeast(0)
 
-    val fracCurrent = pagerState.currentPage + pagerState.currentPageOffsetFraction
+    var scrubbing by remember { mutableStateOf(false) }
+    var scrubFrac by remember { mutableFloatStateOf(0f) }
+
+    val fracCurrent = if (scrubbing) scrubFrac
+        else pagerState.currentPage + pagerState.currentPageOffsetFraction
     val fracWindowStart = (fracCurrent - anchor).coerceIn(0f, maxStart.toFloat())
     val targetOffset = -(step * fracWindowStart)
     val offset by animateDpAsState(
@@ -387,7 +406,6 @@ private fun PagerDots(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val scrubPxPerPage = with(density) { 28.dp.toPx() }
-    var scrubbing by remember { mutableStateOf(false) }
 
     val scrubScale by animateFloatAsState(
         targetValue = if (scrubbing) 1.8f else 1f,
@@ -405,9 +423,10 @@ private fun PagerDots(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
-                    scrubbing = true
                     val originPage = pagerState.currentPage
                     val startX = longPress.position.x
+                    scrubFrac = originPage.toFloat()
+                    scrubbing = true
                     var lastPage = originPage
 
                     try {
@@ -418,8 +437,10 @@ private fun PagerDots(
                             change.consume()
 
                             val dx = change.position.x - startX
-                            val delta = (dx / scrubPxPerPage).toInt()
-                            val target = (originPage + delta).coerceIn(0, count - 1)
+                            val cont = (originPage + dx / scrubPxPerPage)
+                                .coerceIn(0f, (count - 1).toFloat())
+                            scrubFrac = cont
+                            val target = cont.roundToInt().coerceIn(0, count - 1)
                             if (target != lastPage) {
                                 lastPage = target
                                 scope.launch { pagerState.scrollToPage(target) }

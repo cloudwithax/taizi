@@ -15,6 +15,7 @@ private val Fallback = SystemAccent(
 )
 
 private val AccentMap: Map<String, SystemAccent> = mapOf(
+    "__favorites__" to SystemAccent("FAV", Color(0xFFFF4081), Color(0xFF4A0F26)),
     "gb"       to SystemAccent("GB",   Color(0xFF8BBF4A), Color(0xFF2E3B16)),
     "gbc"      to SystemAccent("GBC",  Color(0xFFE4572E), Color(0xFF4A1E10)),
     "gba"      to SystemAccent("GBA",  Color(0xFF5B4BFF), Color(0xFF1B1745)),
