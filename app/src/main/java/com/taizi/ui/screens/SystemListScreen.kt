@@ -51,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -368,13 +369,15 @@ private fun PagerDots(
     val windowSize = minOf(count, 20)
     val anchor = (windowSize - 1) / 2
     val maxStart = (count - windowSize).coerceAtLeast(0)
-    val windowStart = (current - anchor).coerceIn(0, maxStart)
 
+    val fracCurrent = pagerState.currentPage + pagerState.currentPageOffsetFraction
+    val fracWindowStart = (fracCurrent - anchor).coerceIn(0f, maxStart.toFloat())
+    val targetOffset = -(step * fracWindowStart)
     val offset by animateDpAsState(
-        targetValue = -(step * windowStart),
+        targetValue = targetOffset,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
+            stiffness = Spring.StiffnessHigh
         ),
         label = "windowShift"
     )
@@ -445,22 +448,21 @@ private fun PagerDots(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 repeat(count) { i ->
-                    val isActive = i == current
-                    val width by animateFloatAsState(
-                        targetValue = if (isActive) activeWidth.value else dotSize.value,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        ),
-                        label = "dot"
-                    )
+                    val distFromActive = kotlin.math.abs(i - fracCurrent)
+                    val activeness = (1f - distFromActive).coerceIn(0f, 1f)
+                    val width = dotSize.value + (activeWidth.value - dotSize.value) * activeness
+                    val isActive = activeness > 0f
                     Box(
                         modifier = Modifier
                             .height(dotSize)
                             .width(width.dp)
                             .clip(CircleShape)
                             .background(
-                                if (isActive) activeColor
+                                if (isActive) lerp(
+                                    MaterialTheme.colorScheme.outline,
+                                    activeColor,
+                                    activeness
+                                )
                                 else MaterialTheme.colorScheme.outline
                             )
                     )
