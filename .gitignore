@@ -93,7 +93,7 @@ app/debug/
 
 # Test outputs
 test-results/
-screenshots/
+# screenshots/  # root screenshots are used for README
 
 # lint
 lint/intermediates/
