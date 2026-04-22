@@ -5,6 +5,8 @@ plugins {
     id("com.google.dagger.hilt.android") version "2.51" apply false
 }
 
+apply(from = "gradle/validation.gradle.kts")
+
 tasks.register("clean", Delete::class) {
     delete(rootProject.layout.buildDirectory)
 }

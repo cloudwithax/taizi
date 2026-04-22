@@ -37,12 +37,12 @@ validate_semantic_version() {
 
 # Function to get current version
 get_current_version() {
-    grep -A 1 "versionName" app/build.gradle.kts | grep '"' | sed 's/.*"\(.*\)".*/\1/'
+    grep -E "versionName\s*=" app/build.gradle.kts | grep -oE '"[^"]+"' | head -1 | tr -d '"'
 }
 
 # Function to get current version code
 get_current_version_code() {
-    grep -A 1 "versionCode" app/build.gradle.kts | grep '"' | sed 's/.*"\(.*\)".*/\1/'
+    grep -E "versionCode\s*=" app/build.gradle.kts | grep -oE '[0-9]+'
 }
 
 # Function to increment version
