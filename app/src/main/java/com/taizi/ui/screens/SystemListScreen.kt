@@ -60,8 +60,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +83,7 @@ import com.taizi.domain.model.System
 import com.taizi.ui.theme.SystemAccent
 import com.taizi.ui.theme.accentFor
 import com.taizi.ui.theme.imageFor
+import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -110,6 +119,13 @@ fun SystemListScreen(
     val focused = systems.getOrNull(pagerState.currentPage) ?: systems.first()
     val focusedAccent = accentFor(focused.id)
 
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -136,11 +152,38 @@ fun SystemListScreen(
                     .fillMaxWidth()
                     .height(280.dp)
                     .padding(horizontal = 20.dp)
+                    .focusRequester(focusRequester)
+                    .focusable()
+                    .onKeyEvent { event: androidx.compose.ui.input.key.KeyEvent ->
+                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                        when (event.key) {
+                            Key.DirectionLeft -> {
+                                val target = (pagerState.currentPage - 1).coerceAtLeast(0)
+                                if (target != pagerState.currentPage) {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    scope.launch { pagerState.animateScrollToPage(target) }
+                                    true
+                                } else false
+                            }
+                            Key.DirectionRight -> {
+                                val target = (pagerState.currentPage + 1).coerceAtMost(systems.size - 1)
+                                if (target != pagerState.currentPage) {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    scope.launch { pagerState.animateScrollToPage(target) }
+                                    true
+                                } else false
+                            }
+                            else -> false
+                        }
+                    }
             ) { page ->
+                val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
+                val scale = 1f - (pageOffset * 0.1f).coerceAtMost(0.1f)
                 SystemTile(
                     system = systems[page],
                     accent = accentFor(systems[page].id),
-                    onClick = { onSystemClick(systems[page]) }
+                    onClick = { onSystemClick(systems[page]) },
+                    scale = scale
                 )
             }
 
@@ -264,13 +307,15 @@ private fun AccentGlow(accent: SystemAccent) {
 private fun SystemTile(
     system: System,
     accent: SystemAccent,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    scale: Float = 1f
 ) {
     val imageRes = imageFor(system.id)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(28.dp))
             .background(
                 Brush.linearGradient(
