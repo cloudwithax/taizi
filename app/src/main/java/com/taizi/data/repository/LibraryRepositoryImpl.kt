@@ -55,6 +55,7 @@ class LibraryRepositoryImpl(
     private val _library = MutableStateFlow(Library.EMPTY)
 
     private var internalFileObserver: FileObserver? = null
+    private val systemFileObservers = mutableListOf<FileObserver>()
     private var observationJob: Job? = null
     private val systemDefinitions: Map<String, SystemDefinition> by lazy {
         builtInSystemDefinitions()
@@ -109,7 +110,12 @@ class LibraryRepositoryImpl(
                 val rawSystems = coroutineScope {
                     gameFolders.map { folder: File ->
                         async(Dispatchers.IO) {
-                            scanSystemFolder(folder, customMappings)
+                            scanSemaphore.acquire()
+                            try {
+                                scanSystemFolder(folder, customMappings)
+                            } finally {
+                                scanSemaphore.release()
+                            }
                         }
                     }.awaitAll().filterNotNull()
                 }
@@ -689,6 +695,7 @@ class LibraryRepositoryImpl(
                         }
                     }
                     sysObserver.startWatching()
+                    systemFileObservers.add(sysObserver)
                 } catch (e: Exception) {
                     // Folder may not exist
                 }
@@ -699,6 +706,8 @@ class LibraryRepositoryImpl(
     override fun stopFileObserver() {
         internalFileObserver?.stopWatching()
         internalFileObserver = null
+        systemFileObservers.forEach { it.stopWatching() }
+        systemFileObservers.clear()
         observationJob?.cancel()
     }
 
