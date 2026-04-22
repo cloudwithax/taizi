@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.taizi.BuildConfig
 
 private fun treeUriToFilePath(uri: Uri): String? {
     val docId = uri.lastPathSegment ?: return null
@@ -185,7 +186,7 @@ fun SettingsScreen(
                 SettingsSection(title = "About") {
                     SettingsItem(
                         title = "Version",
-                        subtitle = "1.0.4",
+                        subtitle = BuildConfig.VERSION_NAME,
                         icon = MaterialIcons.Filled.Info,
                         onClick = {}
                     )
