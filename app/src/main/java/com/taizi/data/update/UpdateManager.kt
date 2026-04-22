@@ -32,6 +32,12 @@ class UpdateManager(
 ) {
     private val TAG = "UpdateManager"
 
+    companion object {
+        fun findApkDownloadUrl(assets: List<com.taizi.data.network.AssetData>): String {
+            return assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }?.downloadUrl ?: ""
+        }
+    }
+
     suspend fun checkForUpdates(currentVersion: SemanticVersion): UpdateCheckResult {
         return try {
             val release = githubService.getLatestRelease(repoOwner, repoName)
@@ -40,7 +46,14 @@ class UpdateManager(
             }
             val latestVersion = githubService.extractVersionFromTag(release.tagName)
             val isUpdate = latestVersion.compareTo(currentVersion) > 0
-            UpdateCheckResult(isUpdate, currentVersion, latestVersion, release.body ?: "", "", null)
+            UpdateCheckResult(
+                isUpdate,
+                currentVersion,
+                latestVersion,
+                release.body ?: "",
+                findApkDownloadUrl(release.assets),
+                null
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed", e)
             UpdateCheckResult(false, currentVersion, null, "", "", e.message)
@@ -70,7 +83,7 @@ class UpdateManager(
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
             }
             context.startActivity(intent)
             uri
