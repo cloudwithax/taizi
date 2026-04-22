@@ -214,22 +214,23 @@ private fun RandomRouletteOverlay(
     val containerWidthPx = with(density) { 300.dp.toPx() }
 
     // Build a sequence of ~24 picks; last is the predetermined winner.
-    val sequence = remember(games, winner) {
+    val (sequence, winnerIndex) = remember(games, winner) {
         val pool = games.toMutableList()
-        buildList {
+        pool.remove(winner)
+        if (pool.isEmpty()) pool.addAll(games.filter { it != winner })
+        val seq = buildList {
             repeat(20) {
                 add(pool.random().also { pool.remove(it) })
-                if (pool.isEmpty()) pool.addAll(games)
+                if (pool.isEmpty()) pool.addAll(games.filter { it != winner })
             }
             add(winner)
             repeat(3) {
                 add(pool.random().also { pool.remove(it) })
-                if (pool.isEmpty()) pool.addAll(games)
+                if (pool.isEmpty()) pool.addAll(games.filter { it != winner })
             }
         }
+        seq to seq.indexOf(winner)
     }
-
-    val winnerIndex = sequence.indexOfLast { it == winner }
     val targetOffset = containerWidthPx / 2f - (winnerIndex * itemWidthPx + itemWidthPx / 2f)
 
     val offsetX = remember { Animatable(0f) }
@@ -241,7 +242,6 @@ private fun RandomRouletteOverlay(
             animationSpec = tween(durationMillis = 3200, easing = FastOutSlowInEasing)
         )
         animationDone = true
-        // small pause so the user sees the winner before dialog pops
         kotlinx.coroutines.delay(600)
         onComplete(winner)
     }
@@ -272,7 +272,6 @@ private fun RandomRouletteOverlay(
                     .clip(RoundedCornerShape(20.dp))
                     .background(Color(0xFF12121A))
                     .drawBehind {
-                        // accent border glow
                         drawRoundRect(
                             color = accent.copy(alpha = 0.6f),
                             size = size,
@@ -282,7 +281,6 @@ private fun RandomRouletteOverlay(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                // Center highlight line
                 Box(
                     modifier = Modifier
                         .width(2.dp)
@@ -293,7 +291,7 @@ private fun RandomRouletteOverlay(
 
                 Row(
                     modifier = Modifier
-                        .offset(x = with(density) { offsetX.value.toDp() })
+                        .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
                 ) {
                     sequence.forEachIndexed { index, game ->
                         val itemCenter = offsetX.value + index * itemWidthPx + itemWidthPx / 2f
