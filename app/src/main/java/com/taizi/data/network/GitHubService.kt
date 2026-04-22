@@ -1,5 +1,8 @@
 package com.taizi.data.network
 
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.taizi.domain.model.SemanticVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,18 +31,21 @@ class GitHubService {
 
     private fun parseReleaseJson(json: String): ReleaseData? {
         return try {
-            val tagName = extractValue(json, "tag_name")
-            val name = extractValue(json, "name")
-            val body = extractValue(json, "body")
-            val htmlUrl = extractValue(json, "html_url")
-            if (tagName.isEmpty()) return null
-            ReleaseData(tagName, name, body, htmlUrl, emptyList())
+            val root = JsonParser.parseString(json).asJsonObject
+            val tagName = root.get("tag_name")?.takeUnless { it.isJsonNull }?.asString ?: return null
+            val name = root.get("name")?.takeUnless { it.isJsonNull }?.asString
+            val body = root.get("body")?.takeUnless { it.isJsonNull }?.asString
+            val htmlUrl = root.get("html_url")?.takeUnless { it.isJsonNull }?.asString ?: ""
+            val assets = root.getAsJsonArray("assets")?.mapNotNull { parseAsset(it.asJsonObject) } ?: emptyList()
+            ReleaseData(tagName, name, body, htmlUrl, assets)
         } catch (e: Exception) { null }
     }
 
-    private fun extractValue(json: String, key: String): String {
-        val regex = "\"$key\":\"([^\"]*)\"".toRegex()
-        return regex.find(json)?.groupValues?.get(1) ?: ""
+    private fun parseAsset(obj: JsonObject): AssetData? {
+        val name = obj.get("name")?.asString ?: return null
+        val url = obj.get("browser_download_url")?.asString ?: return null
+        val size = obj.get("size")?.asLong ?: 0L
+        return AssetData(name, url, size)
     }
 }
 
