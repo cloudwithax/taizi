@@ -73,6 +73,7 @@ class MainViewModel @Inject constructor(
 
     private var scanJob: Job? = null
     private var fileObserverJob: Job? = null
+    private var scrapeCollectionJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -204,7 +205,8 @@ class MainViewModel @Inject constructor(
 
     fun scrapeAll() {
         BoxArtScrapeService.start(appContext)
-        viewModelScope.launch {
+        scrapeCollectionJob?.cancel()
+        scrapeCollectionJob = viewModelScope.launch {
             scrapeStatus.collect { status ->
                 if (!status.isRunning && status.current > 0) {
                     val lib = repository.getLibrary().value
@@ -218,6 +220,8 @@ class MainViewModel @Inject constructor(
 
     fun cancelScrape() {
         BoxArtScrapeService.stop(appContext)
+        scrapeCollectionJob?.cancel()
+        scrapeCollectionJob = null
     }
 
     fun setScraperCredentials(username: String, password: String) {
@@ -240,6 +244,7 @@ class MainViewModel @Inject constructor(
         super.onCleared()
         scanJob?.cancel()
         fileObserverJob?.cancel()
+        scrapeCollectionJob?.cancel()
         repository.stopFileObserver()
     }
 }
