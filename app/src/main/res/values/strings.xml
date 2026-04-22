@@ -27,4 +27,10 @@
     <string name="setup_scan_library">Scan Library</string>
     <string name="setup_configure_emulators">Configure Emulators</string>
     <string name="setup_complete">Setup Complete</string>
+    <string name="update_available">Update Available</string>
+    <string name="update_downloading">Downloading Update</string>
+    <string name="update_ready">Install Update</string>
+    <string name="update_error">Update Error</string>
+    <string name="update_check">Check for Updates</string>
+    <string name="update_none">No Updates</string>
 </resources>

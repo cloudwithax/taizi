@@ -23,6 +23,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Query emulator packages for launching ROMs (Android 11+ package visibility) -->
     <queries>
@@ -78,6 +79,15 @@
             android:name=".data.scraper.BoxArtScrapeService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Update receiver: relaunch app after package replacement -->
+        <receiver
+            android:name=".data.update.UpdateReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- File Provider for sharing ROM paths -->
         <provider

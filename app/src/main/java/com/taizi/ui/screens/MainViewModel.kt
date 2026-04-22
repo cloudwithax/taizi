@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.taizi.data.scraper.BoxArtScrapeService
 import com.taizi.data.scraper.ScrapeStatus
+import com.taizi.data.update.UpdateCheckResult
+import com.taizi.data.update.UpdateDownloadState
+import com.taizi.data.update.UpdateManager
 import com.taizi.domain.model.*
 import com.taizi.domain.model.LibraryChange
 import com.taizi.domain.repository.LibraryRepository
@@ -36,6 +39,7 @@ sealed class MainUiState {
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val repository: LibraryRepository,
+    private val updateManager: UpdateManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -71,9 +75,16 @@ class MainViewModel @Inject constructor(
     private val _scanProgress = MutableStateFlow(ScanProgress())
     val scanProgress: StateFlow<ScanProgress> = _scanProgress.asStateFlow()
 
+    private val _updateDownloadState = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
+    val updateDownloadState: StateFlow<UpdateDownloadState> = _updateDownloadState.asStateFlow()
+
+    private val _updateCheckResult = MutableStateFlow<UpdateCheckResult?>(null)
+    val updateCheckResult: StateFlow<UpdateCheckResult?> = _updateCheckResult.asStateFlow()
+
     private var scanJob: Job? = null
     private var fileObserverJob: Job? = null
     private var scrapeCollectionJob: Job? = null
+    private var updateJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -228,6 +239,55 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             repository.setScraperCredentials(username, password)
         }
+    }
+
+    fun checkForUpdates() {
+        updateJob?.cancel()
+        _updateDownloadState.value = UpdateDownloadState.Checking
+        updateJob = viewModelScope.launch {
+            val result = updateManager.checkForUpdates()
+            _updateCheckResult.value = result
+            _updateDownloadState.value = if (result.isUpdateAvailable && result.error == null) {
+                UpdateDownloadState.Idle
+            } else if (result.error != null) {
+                UpdateDownloadState.Error(result.error)
+            } else {
+                UpdateDownloadState.Idle
+            }
+        }
+    }
+
+    fun downloadUpdate() {
+        val url = _updateCheckResult.value?.downloadUrl ?: return
+        updateJob?.cancel()
+        _updateDownloadState.value = UpdateDownloadState.Downloading(0)
+        updateJob = viewModelScope.launch {
+            val file = updateManager.downloadUpdate(url) { progress ->
+                _updateDownloadState.value = UpdateDownloadState.Downloading(progress)
+            }
+            if (file != null) {
+                _updateDownloadState.value = UpdateDownloadState.Ready(file)
+            } else {
+                _updateDownloadState.value = UpdateDownloadState.Error("Download failed")
+            }
+        }
+    }
+
+    fun installUpdate(file: java.io.File) {
+        updateManager.installApk(file)
+    }
+
+    fun canRequestInstallPackages(): Boolean {
+        return updateManager.canRequestInstallPackages()
+    }
+
+    fun getInstallPermissionIntent() = updateManager.getInstallPermissionIntent()
+
+    fun resetUpdateState() {
+        _updateDownloadState.value = UpdateDownloadState.Idle
+        _updateCheckResult.value = null
+        updateJob?.cancel()
+        updateJob = null
     }
 
     fun clearCache() {

@@ -4,7 +4,9 @@ import android.content.Context
 import com.taizi.data.local.BoxArtDao
 import com.taizi.data.local.BoxArtDatabase
 import com.taizi.data.local.LocalDataSource
+import com.taizi.data.network.GitHubService
 import com.taizi.data.repository.LibraryRepositoryImpl
+import com.taizi.data.update.UpdateManager
 import com.taizi.domain.repository.LibraryRepository
 import dagger.Module
 import dagger.Provides
@@ -43,5 +45,25 @@ object AppModule {
         boxArtDao: BoxArtDao
     ): LibraryRepository {
         return LibraryRepositoryImpl(context, localDataSource, boxArtDao)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGitHubService(): GitHubService {
+        return GitHubService()
+    }
+
+    @Provides
+    @Singleton
+    fun provideUpdateManager(
+        @ApplicationContext context: Context,
+        githubService: GitHubService
+    ): UpdateManager {
+        return UpdateManager(
+            context = context,
+            githubService = githubService,
+            repoOwner = "cloudwithax",
+            repoName = "taizi"
+        )
     }
 }

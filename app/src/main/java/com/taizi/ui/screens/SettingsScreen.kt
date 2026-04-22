@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.taizi.BuildConfig
+import com.taizi.data.update.UpdateDownloadState
 
 private fun treeUriToFilePath(uri: Uri): String? {
     val docId = uri.lastPathSegment ?: return null
@@ -60,7 +61,10 @@ fun SettingsScreen(
     }
 
     var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
     val scrapeStatus by viewModel.scrapeStatus.collectAsState()
+    val updateDownloadState by viewModel.updateDownloadState.collectAsState()
+    val updateCheckResult by viewModel.updateCheckResult.collectAsState()
 
     val (initIndex, initOffset) = viewModel.getSettingsScroll()
     val listState = rememberLazyListState(
@@ -87,6 +91,108 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showClearCacheDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showUpdateDialog && updateCheckResult != null) {
+        val result = updateCheckResult!!
+        AlertDialog(
+            onDismissRequest = {
+                showUpdateDialog = false
+                viewModel.resetUpdateState()
+            },
+            title = {
+                Text(
+                    when (updateDownloadState) {
+                        is UpdateDownloadState.Downloading -> "Downloading Update"
+                        is UpdateDownloadState.Ready -> "Install Update"
+                        is UpdateDownloadState.Error -> "Update Error"
+                        else -> if (result.isUpdateAvailable) "Update Available" else "No Updates"
+                    }
+                )
+            },
+            text = {
+                Column {
+                    when (updateDownloadState) {
+                        is UpdateDownloadState.Downloading -> {
+                            val progress = (updateDownloadState as UpdateDownloadState.Downloading).progress
+                            Text("Downloading ${result.latestVersion}…")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { progress / 100f },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text("$progress%", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        is UpdateDownloadState.Ready -> {
+                            Text("Update ${result.latestVersion} is ready to install. The app will restart after installation.")
+                        }
+                        is UpdateDownloadState.Error -> {
+                            Text((updateDownloadState as UpdateDownloadState.Error).message)
+                        }
+                        else -> {
+                            if (result.isUpdateAvailable) {
+                                Text("A new version is available: ${result.latestVersion}")
+                                if (result.releaseNotes.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Release notes:", fontWeight = FontWeight.Medium)
+                                    Text(result.releaseNotes, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            } else {
+                                Text("You are on the latest version (${result.currentVersion}).")
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                when (updateDownloadState) {
+                    is UpdateDownloadState.Ready -> {
+                        TextButton(onClick = {
+                            val file = (updateDownloadState as UpdateDownloadState.Ready).file
+                            if (viewModel.canRequestInstallPackages()) {
+                                showUpdateDialog = false
+                                viewModel.installUpdate(file)
+                            } else {
+                                val intent = viewModel.getInstallPermissionIntent()
+                                context.startActivity(intent)
+                            }
+                        }) { Text("Install") }
+                    }
+                    is UpdateDownloadState.Downloading -> {
+                        TextButton(onClick = {
+                            viewModel.resetUpdateState()
+                            showUpdateDialog = false
+                        }) { Text("Cancel") }
+                    }
+                    is UpdateDownloadState.Error -> {
+                        TextButton(onClick = {
+                            viewModel.resetUpdateState()
+                            showUpdateDialog = false
+                        }) { Text("Dismiss") }
+                    }
+                    else -> {
+                        if (result.isUpdateAvailable) {
+                            TextButton(onClick = {
+                                viewModel.downloadUpdate()
+                            }) { Text("Download") }
+                        } else {
+                            TextButton(onClick = {
+                                showUpdateDialog = false
+                                viewModel.resetUpdateState()
+                            }) { Text("OK") }
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                if (updateDownloadState !is UpdateDownloadState.Downloading) {
+                    TextButton(onClick = {
+                        showUpdateDialog = false
+                        viewModel.resetUpdateState()
+                    }) { Text("Close") }
+                }
             }
         )
     }
@@ -189,6 +295,18 @@ fun SettingsScreen(
                         subtitle = BuildConfig.VERSION_NAME,
                         icon = MaterialIcons.Filled.Info,
                         onClick = {}
+                    )
+                    val isChecking = updateDownloadState is UpdateDownloadState.Checking
+                    SettingsItem(
+                        title = if (isChecking) "Checking…" else "Check for Updates",
+                        subtitle = if (updateCheckResult?.isUpdateAvailable == true) "Update available!" else "Tap to check for new versions",
+                        icon = if (isChecking) MaterialIcons.Filled.Sync else MaterialIcons.Filled.SystemUpdate,
+                        onClick = {
+                            if (!isChecking) {
+                                viewModel.checkForUpdates()
+                                showUpdateDialog = true
+                            }
+                        }
                     )
                     SettingsItem(
                         title = "Taizi",
