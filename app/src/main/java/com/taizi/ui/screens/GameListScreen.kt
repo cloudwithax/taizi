@@ -1,7 +1,7 @@
 package com.taizi.ui.screens
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -233,17 +232,24 @@ private fun RandomRouletteOverlay(
     }
     val targetOffset = containerWidthPx / 2f - (winnerIndex * itemWidthPx + itemWidthPx / 2f)
 
-    val offsetX = remember { Animatable(0f) }
-    var animationDone by remember { mutableStateOf(false) }
+    var started by remember { mutableStateOf(false) }
+    val offsetX by animateFloatAsState(
+        targetValue = if (started) targetOffset else 0f,
+        animationSpec = tween(durationMillis = 3200, easing = FastOutSlowInEasing),
+        label = "roulette"
+    )
 
     LaunchedEffect(Unit) {
-        offsetX.animateTo(
-            targetValue = targetOffset,
-            animationSpec = tween(durationMillis = 3200, easing = FastOutSlowInEasing)
-        )
-        animationDone = true
-        kotlinx.coroutines.delay(600)
-        onComplete(winner)
+        started = true
+    }
+
+    var animationDone by remember { mutableStateOf(false) }
+    LaunchedEffect(offsetX) {
+        if (started && abs(offsetX - targetOffset) < 1f && !animationDone) {
+            animationDone = true
+            kotlinx.coroutines.delay(600)
+            onComplete(winner)
+        }
     }
 
     Box(
@@ -291,10 +297,10 @@ private fun RandomRouletteOverlay(
 
                 Row(
                     modifier = Modifier
-                        .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
+                        .graphicsLayer { translationX = offsetX }
                 ) {
                     sequence.forEachIndexed { index, game ->
-                        val itemCenter = offsetX.value + index * itemWidthPx + itemWidthPx / 2f
+                        val itemCenter = offsetX + index * itemWidthPx + itemWidthPx / 2f
                         val containerCenter = containerWidthPx / 2f
                         val distance = abs(itemCenter - containerCenter)
                         val maxDist = containerWidthPx / 1.5f
