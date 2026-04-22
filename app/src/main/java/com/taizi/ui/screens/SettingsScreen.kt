@@ -190,6 +190,12 @@ fun SettingsScreen(
                         icon = MaterialIcons.Filled.Info,
                         onClick = {}
                     )
+                    SettingsItem(
+                        title = "Taizi",
+                        subtitle = "A launcher for your retro handheld",
+                        iconRes = com.taizi.R.drawable.icon,
+                        onClick = {}
+                    )
                 }
             }
         }
@@ -227,7 +233,8 @@ fun SettingsSection(
 fun SettingsItem(
     title: String,
     subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    iconRes: Int? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -237,12 +244,20 @@ fun SettingsItem(
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-        )
+        if (iconRes != null) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+            )
+        } else if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.width(16.dp))
 
