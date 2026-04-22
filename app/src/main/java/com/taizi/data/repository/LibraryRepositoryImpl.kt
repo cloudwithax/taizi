@@ -1013,6 +1013,7 @@ class LibraryRepositoryImpl(
                                 ) ?: return@async
 
                                 val updatedGame = game.copy(
+                                    name = info.title ?: game.name,
                                     boxArtPath = localPath,
                                     metadata = GameMetadata(
                                         description = info.description,
@@ -1028,7 +1029,7 @@ class LibraryRepositoryImpl(
                                 boxArtDao.upsert(BoxArtEntry(
                                     romPath = game.path,
                                     systemId = systemId,
-                                    gameName = game.name,
+                                    gameName = updatedGame.name,
                                     artPath = localPath,
                                     description = info.description,
                                     genre = info.genre,
@@ -1105,6 +1106,7 @@ class LibraryRepositoryImpl(
                                 ) ?: return@async
 
                                 val updatedGame = game.copy(
+                                    name = info.title ?: game.name,
                                     boxArtPath = localPath,
                                     metadata = GameMetadata(
                                         description = info.description,
@@ -1120,7 +1122,7 @@ class LibraryRepositoryImpl(
                                 boxArtDao.upsert(BoxArtEntry(
                                     romPath = game.path,
                                     systemId = systemId,
-                                    gameName = game.name,
+                                    gameName = updatedGame.name,
                                     artPath = localPath,
                                     description = info.description,
                                     genre = info.genre,

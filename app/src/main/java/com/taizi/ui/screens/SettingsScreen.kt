@@ -255,7 +255,7 @@ fun SettingsScreen(
                     } else {
                         SettingsItem(
                             title = "Scrape All Box Art",
-                            subtitle = "Download art from ScreenScraper (runs in background)",
+                            subtitle = "Download art and normalize names from ScreenScraper (runs in background)",
                             icon = MaterialIcons.Filled.Image,
                             onClick = { viewModel.scrapeAll() }
                         )
