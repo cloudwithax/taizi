@@ -149,6 +149,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                             viewModel = viewModel,
                             onComplete = { selected ->
                                 viewModel.launchGame(selected)
+                                viewModel.navigateBack()
                             }
                         )
                     }
