@@ -436,7 +436,7 @@ private fun Chip(text: String, background: Color) {
 }
 
 @Composable
-private fun PlaceholderArt(title: String, accent: Color) {
+internal fun PlaceholderArt(title: String, accent: Color) {
     Box(
         modifier = Modifier
             .fillMaxSize()

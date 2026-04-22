@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,8 +32,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -41,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.taizi.domain.model.Game
 import com.taizi.ui.theme.accentFor
 import kotlin.math.abs
@@ -57,7 +61,7 @@ fun RouletteScreen(
     val accent = accentFor(systemId).primary
 
     val density = LocalDensity.current
-    val itemWidthPx = with(density) { 220.dp.toPx() }
+    val itemWidthPx = with(density) { 140.dp.toPx() }
     val containerWidthPx = with(density) { 300.dp.toPx() }
 
     val (sequence, winnerIndex) = remember(games, winner) {
@@ -65,12 +69,12 @@ fun RouletteScreen(
         pool.remove(winner)
         if (pool.isEmpty()) pool.addAll(games.filter { it != winner })
         val seq = buildList {
-            repeat(20) {
+            repeat(30) {
                 add(pool.random().also { pool.remove(it) })
                 if (pool.isEmpty()) pool.addAll(games.filter { it != winner })
             }
             add(winner)
-            repeat(3) {
+            repeat(5) {
                 add(pool.random().also { pool.remove(it) })
                 if (pool.isEmpty()) pool.addAll(games.filter { it != winner })
             }
@@ -82,7 +86,7 @@ fun RouletteScreen(
     var started by remember { mutableStateOf(false) }
     val offsetX by animateFloatAsState(
         targetValue = if (started) targetOffset else 0f,
-        animationSpec = tween(durationMillis = 3200, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 10000, easing = FastOutSlowInEasing),
         label = "roulette"
     )
 
@@ -94,7 +98,7 @@ fun RouletteScreen(
     LaunchedEffect(offsetX) {
         if (started && abs(offsetX - targetOffset) < 1f && !animationDone) {
             animationDone = true
-            kotlinx.coroutines.delay(600)
+            kotlinx.coroutines.delay(800)
             onComplete(winner)
         }
     }
@@ -111,7 +115,7 @@ fun RouletteScreen(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = if (animationDone) "WINNER" else "SPINNING...",
+                text = if (animationDone) "WINNER!" else "SPINNING...",
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 4.sp
@@ -124,7 +128,7 @@ fun RouletteScreen(
             Box(
                 modifier = Modifier
                     .width(300.dp)
-                    .height(140.dp)
+                    .height(220.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(Color(0xFF12121A))
                     .drawBehind {
@@ -156,32 +160,52 @@ fun RouletteScreen(
                         val maxDist = containerWidthPx / 1.5f
                         val normalized = (distance / maxDist).coerceIn(0f, 1f)
 
-                        val scale = 1f - (normalized * 0.35f)
-                        val alpha = 1f - (normalized * 0.75f)
+                        val scale = 1f - (normalized * 0.3f)
+                        val alpha = 1f - (normalized * 0.8f)
 
                         Box(
                             modifier = Modifier
-                                .width(220.dp)
+                                .width(140.dp)
                                 .fillMaxHeight()
                                 .graphicsLayer {
                                     this.scaleX = scale
                                     this.scaleY = scale
                                     this.alpha = alpha
-                                },
-                            contentAlignment = Alignment.Center
+                                }
+                                .padding(6.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surface)
                         ) {
-                            Text(
-                                text = game.displayName,
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 22.sp
-                                ),
-                                color = if (index == winnerIndex && animationDone) accent else Color.White,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(horizontal = 12.dp)
+                            RouletteGameArt(
+                                game = game,
+                                accent = accent,
+                                isWinner = index == winnerIndex && animationDone
                             )
+
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .fillMaxWidth()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.9f)
+                                            )
+                                        )
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = game.displayName,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = if (index == winnerIndex && animationDone) accent else Color.White,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -194,9 +218,32 @@ fun RouletteScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Good luck!",
+                text = if (animationDone) "Launching..." else "Good luck!",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouletteGameArt(game: Game, accent: Color, isWinner: Boolean) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        PlaceholderArt(title = game.displayName, accent = accent)
+        if (game.boxArtPath != null) {
+            AsyncImage(
+                model = game.boxArtPath,
+                contentDescription = game.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                filterQuality = FilterQuality.Low
+            )
+        }
+        if (isWinner) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(accent.copy(alpha = 0.15f))
             )
         }
     }
