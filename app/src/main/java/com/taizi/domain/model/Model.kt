@@ -6,8 +6,7 @@ package com.taizi.domain.model
 
 enum class BiosStatus {
     MISSING,
-    PRESENT,
-    INCORRECT_HASH
+    PRESENT
 }
 
 enum class LibraryChange {
