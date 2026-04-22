@@ -30,7 +30,7 @@ android {
     signingConfigs {
         create("release") {
             val releaseKeystore = file("${rootDir}/app/keystore/release.keystore")
-            
+
             if (releaseKeystore.exists()) {
                 storeFile = releaseKeystore
                 storePassword = "taizirelease"
