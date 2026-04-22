@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -75,6 +76,7 @@ fun GameListScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
+    var randomGame by remember { mutableStateOf<Game?>(null) }
 
     val filteredGames = remember(games, searchQuery, showFavoritesOnly) {
         games.filter { game ->
@@ -96,6 +98,24 @@ fun GameListScreen(
         }.collect { (i, off) -> viewModel.setGameListScroll(systemId, i, off) }
     }
 
+    if (randomGame != null) {
+        val game = randomGame!!
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { randomGame = null },
+            title = { Text("Random Pick") },
+            text = { Text("Launch ${game.displayName}?") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    randomGame = null
+                    onGameClick(game)
+                }) { Text("Launch") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { randomGame = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -112,7 +132,12 @@ fun GameListScreen(
             searchOpen = searchOpen,
             onBack = onBack,
             onToggleSearch = { searchOpen = !searchOpen; if (!searchOpen) searchQuery = "" },
-            onToggleFavorites = { showFavoritesOnly = !showFavoritesOnly }
+            onToggleFavorites = { showFavoritesOnly = !showFavoritesOnly },
+            onRandomClick = {
+                if (games.isNotEmpty()) {
+                    randomGame = games.random()
+                }
+            }
         )
 
         if (searchOpen) {
@@ -161,7 +186,8 @@ private fun SystemBanner(
     searchOpen: Boolean,
     onBack: () -> Unit,
     onToggleSearch: () -> Unit,
-    onToggleFavorites: () -> Unit
+    onToggleFavorites: () -> Unit,
+    onRandomClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -210,6 +236,14 @@ private fun SystemBanner(
                         contentDescription = "Favorites",
                         tint = if (showFavoritesOnly) Color.White
                         else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                RoundIconButton(onClick = onRandomClick) {
+                    Icon(
+                        imageVector = Icons.Filled.Shuffle,
+                        contentDescription = "Random",
+                        tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
