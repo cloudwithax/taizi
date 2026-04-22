@@ -122,10 +122,11 @@ class MainViewModel @Inject constructor(
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             val hadLibrary = _uiState.value is MainUiState.LibraryLoaded
-            val isNewRoot = romRoot != null
+            val currentRoot = repository.getLibrary().value.romRoot
+            val isNewRoot = romRoot != null && romRoot != currentRoot
             if (!hadLibrary || isNewRoot) _uiState.value = MainUiState.Scanning
 
-            val root = romRoot ?: repository.getLibrary().value.romRoot
+            val root = romRoot ?: currentRoot
             if (root.isEmpty()) {
                 if (!hadLibrary || isNewRoot) _uiState.value = MainUiState.Error("No ROM root configured")
                 return@launch
