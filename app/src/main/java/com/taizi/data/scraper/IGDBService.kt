@@ -36,19 +36,103 @@ class IGDBService(private val context: Context) {
         private const val CLIENT_SECRET = "3rg36w8g692ly7ddik1kqbf1oinem4"
 
         val PLATFORM_IDS = mapOf(
+            // Nintendo
             "gb" to 33,
             "gbc" to 22,
             "gba" to 24,
             "nes" to 18,
+            "fds" to 51,
             "snes" to 19,
             "n64" to 4,
-            "psx" to 7,
-            "psp" to 38,
+            "gamecube" to 21,
+            "wii" to 5,
             "nds" to 20,
+            "3ds" to 37,
+            "virtualboy" to 87,
+            "pokemini" to 166,
+            // Sony
+            "psx" to 7,
+            "ps2" to 8,
+            "psp" to 38,
+            // Sega
+            "genesis" to 29,
+            "sms" to 64,
+            "gamegear" to 35,
+            "sg1000" to 84,
+            "sega32x" to 30,
+            "segacd" to 78,
+            "saturn" to 32,
             "dc" to 23,
-            "mame" to 52,
+            "naomi" to 52,
+            // NEC
             "pce" to 86,
-            "atari2600" to 59
+            "supergrafx" to 128,
+            "pcfx" to 86,
+            // Atari
+            "atari2600" to 59,
+            "atari5200" to 66,
+            "atari7800" to 60,
+            "atari800" to 65,
+            "atarist" to 63,
+            "lynx" to 61,
+            "jaguar" to 62,
+            // SNK
+            "neogeo" to 80,
+            "neogeocd" to 136,
+            "ngpc" to 120,
+            "wonderswan" to 57,
+            // Arcade
+            "mame" to 52,
+            "fbneo" to 52,
+            "cps1" to 52,
+            "cps2" to 52,
+            "cps3" to 52,
+            "model2" to 52,
+            "daphne" to 52,
+            // Commodore / Amiga
+            "c64" to 15,
+            "c128" to 15,
+            "vic20" to 71,
+            "cplus4" to 94,
+            "pet" to 90,
+            "amiga" to 16,
+            // Amstrad / Sinclair
+            "amstradcpc" to 25,
+            "zxspectrum" to 26,
+            "zx81" to 26,
+            // MSX
+            "msx" to 27,
+            "msx2" to 53,
+            // Apple / BBC / Acorn
+            "apple2" to 75,
+            "apple2gs" to 115,
+            "archimedes" to 116,
+            "bbcmicro" to 69,
+            "electron" to 134,
+            // Japanese PCs
+            "pc88" to 125,
+            "pc98" to 149,
+            "x1" to 77,
+            "x68000" to 121,
+            "fm7" to 152,
+            "fmtowns" to 118,
+            // DOS / PC
+            "dos" to 13,
+            // Misc
+            "colecovision" to 68,
+            "intellivision" to 67,
+            "3do" to 50,
+            "vectrex" to 70,
+            "odyssey2" to 88,
+            "channelf" to 127,
+            "cdi" to 117,
+            "mac" to 14,
+            "ti99" to 129,
+            "thomson" to 156,
+            "trs80" to 126,
+            "vc4000" to 138,
+            "astrocade" to 91,
+            "j2me" to 55
         )
     }
 
