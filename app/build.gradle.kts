@@ -31,18 +31,42 @@ android {
         create("release") {
             val releaseKeystore = file("${rootDir}/app/keystore/release.keystore")
             
-            // Fallback to debug keystore if release keystore doesn't exist
             if (releaseKeystore.exists()) {
                 storeFile = releaseKeystore
                 storePassword = "taizirelease"
                 keyAlias = "taizi"
                 keyPassword = "taizirelease"
             } else {
+                // Fallback to debug keystore; generate one if missing (CI environments)
                 val debugConfig = signingConfigs.getByName("debug")
-                storeFile = debugConfig.storeFile
-                storePassword = debugConfig.storePassword
-                keyAlias = debugConfig.keyAlias
-                keyPassword = debugConfig.keyPassword
+                val debugKeystore = debugConfig.storeFile
+                if (debugKeystore == null || !debugKeystore.exists()) {
+                    val generated = file("${layout.buildDirectory.get().asFile}/generated-debug.keystore")
+                    generated.parentFile.mkdirs()
+                    exec {
+                        commandLine(
+                            "keytool", "-genkey", "-v",
+                            "-keystore", generated.absolutePath,
+                            "-alias", "androiddebugkey",
+                            "-keypass", "android",
+                            "-storepass", "android",
+                            "-keyalg", "RSA",
+                            "-keysize", "2048",
+                            "-validity", "10000",
+                            "-dname", "CN=Android Debug,O=Android,C=US"
+                        )
+                        isIgnoreExitValue = false
+                    }
+                    storeFile = generated
+                    storePassword = "android"
+                    keyAlias = "androiddebugkey"
+                    keyPassword = "android"
+                } else {
+                    storeFile = debugKeystore
+                    storePassword = debugConfig.storePassword
+                    keyAlias = debugConfig.keyAlias
+                    keyPassword = debugConfig.keyPassword
+                }
             }
         }
     }
