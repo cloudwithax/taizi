@@ -14,7 +14,7 @@ import com.google.gson.reflect.TypeToken
 import com.taizi.data.local.BoxArtDao
 import com.taizi.data.local.BoxArtEntry
 import com.taizi.data.local.LocalDataSource
-import com.taizi.data.scraper.IGDBService
+import com.taizi.data.scraper.ScreenScraperService
 import com.taizi.data.scraper.ScrapedGame
 import com.taizi.data.scraper.ScraperCredentials
 import com.taizi.domain.model.*
@@ -63,7 +63,7 @@ class LibraryRepositoryImpl(
 
     // Concurrency limiter to avoid overloading disk
     private val scanSemaphore = Semaphore(4) // Max 4 concurrent system scans
-    private val scraperService = IGDBService(context)
+    private val scraperService = ScreenScraperService(context)
 
     init {
         // Nothing auto-started; ViewModel will trigger cache loading
