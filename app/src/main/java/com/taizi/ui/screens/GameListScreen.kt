@@ -80,7 +80,8 @@ fun GameListScreen(
     systemId: String,
     viewModel: MainViewModel = hiltViewModel(),
     onGameClick: (Game) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onRandomClick: (Game) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val system = remember(uiState, systemId) { viewModel.getSystemById(systemId) }
@@ -90,8 +91,6 @@ fun GameListScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
-    var spinningGame by remember { mutableStateOf<Game?>(null) }
-    var randomGame by remember { mutableStateOf<Game?>(null) }
 
     val filteredGames = remember(games, searchQuery, showFavoritesOnly) {
         games.filter { game ->
@@ -113,36 +112,6 @@ fun GameListScreen(
         }.collect { (i, off) -> viewModel.setGameListScroll(systemId, i, off) }
     }
 
-    if (spinningGame != null) {
-        RandomRouletteOverlay(
-            games = games,
-            winner = spinningGame!!,
-            accent = accent.primary,
-            onComplete = { selected ->
-                spinningGame = null
-                randomGame = selected
-            }
-        )
-    }
-
-    if (randomGame != null) {
-        val game = randomGame!!
-        AlertDialog(
-            onDismissRequest = { randomGame = null },
-            title = { Text("Random Pick") },
-            text = { Text("Launch ${game.displayName}?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    randomGame = null
-                    onGameClick(game)
-                }) { Text("Launch") }
-            },
-            dismissButton = {
-                TextButton(onClick = { randomGame = null }) { Text("Cancel") }
-            }
-        )
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -162,7 +131,7 @@ fun GameListScreen(
             onToggleFavorites = { showFavoritesOnly = !showFavoritesOnly },
             onRandomClick = {
                 if (games.isNotEmpty()) {
-                    spinningGame = games.random()
+                    onRandomClick(games.random())
                 }
             }
         )
@@ -199,175 +168,6 @@ fun GameListScreen(
             }
         }
     }
-}
-
-@Composable
-private fun RandomRouletteOverlay(
-    games: List<Game>,
-    winner: Game,
-    accent: Color,
-    onComplete: (Game) -> Unit
-) {
-    val density = LocalDensity.current
-    val itemWidthPx = with(density) { 220.dp.toPx() }
-    val containerWidthPx = with(density) { 300.dp.toPx() }
-
-    // Build a sequence of ~24 picks; last is the predetermined winner.
-    val (sequence, winnerIndex) = remember(games, winner) {
-        val pool = games.toMutableList()
-        pool.remove(winner)
-        if (pool.isEmpty()) pool.addAll(games.filter { it != winner })
-        val seq = buildList {
-            repeat(20) {
-                add(pool.random().also { pool.remove(it) })
-                if (pool.isEmpty()) pool.addAll(games.filter { it != winner })
-            }
-            add(winner)
-            repeat(3) {
-                add(pool.random().also { pool.remove(it) })
-                if (pool.isEmpty()) pool.addAll(games.filter { it != winner })
-            }
-        }
-        seq to seq.indexOf(winner)
-    }
-    val targetOffset = containerWidthPx / 2f - (winnerIndex * itemWidthPx + itemWidthPx / 2f)
-
-    var started by remember { mutableStateOf(false) }
-    val offsetX by animateFloatAsState(
-        targetValue = if (started) targetOffset else 0f,
-        animationSpec = tween(durationMillis = 3200, easing = FastOutSlowInEasing),
-        label = "roulette"
-    )
-
-    LaunchedEffect(Unit) {
-        started = true
-    }
-
-    var animationDone by remember { mutableStateOf(false) }
-    LaunchedEffect(offsetX) {
-        if (started && abs(offsetX - targetOffset) < 1f && !animationDone) {
-            animationDone = true
-            kotlinx.coroutines.delay(600)
-            onComplete(winner)
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.92f))
-            .clickable(enabled = false) { },
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = if (animationDone) "WINNER" else "SPINNING...",
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 4.sp
-                ),
-                color = accent
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Box(
-                modifier = Modifier
-                    .width(300.dp)
-                    .height(140.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF12121A))
-                    .drawBehind {
-                        drawRoundRect(
-                            color = accent.copy(alpha = 0.6f),
-                            size = size,
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx(), 20.dp.toPx()),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .fillMaxHeight()
-                        .background(accent.copy(alpha = 0.5f))
-                        .zIndex(2f)
-                )
-
-                Row(
-                    modifier = Modifier
-                        .graphicsLayer { translationX = offsetX }
-                ) {
-                    sequence.forEachIndexed { index, game ->
-                        val itemCenter = offsetX + index * itemWidthPx + itemWidthPx / 2f
-                        val containerCenter = containerWidthPx / 2f
-                        val distance = abs(itemCenter - containerCenter)
-                        val maxDist = containerWidthPx / 1.5f
-                        val normalized = (distance / maxDist).coerceIn(0f, 1f)
-
-                        val scale = 1f - (normalized * 0.35f)
-                        val alpha = 1f - (normalized * 0.75f)
-
-                        Box(
-                            modifier = Modifier
-                                .width(220.dp)
-                                .fillMaxHeight()
-                                .graphicsLayer {
-                                    this.scaleX = scale
-                                    this.scaleY = scale
-                                    this.alpha = alpha
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = game.displayName,
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 22.sp
-                                ),
-                                color = if (index == winnerIndex && animationDone) accent else Color.White,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Top pointer triangle
-                Box(modifier = Modifier.align(Alignment.TopCenter)) {
-                    PointerTriangle(accent = accent)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "Good luck!",
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.6f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun PointerTriangle(accent: Color) {
-    val path = remember { Path() }
-    Box(
-        modifier = Modifier
-            .size(width = 24.dp, height = 16.dp)
-            .drawBehind {
-                path.reset()
-                path.moveTo(size.width / 2f, size.height)
-                path.lineTo(0f, 0f)
-                path.lineTo(size.width, 0f)
-                path.close()
-                drawPath(path, accent)
-            }
-    )
 }
 
 @Composable
