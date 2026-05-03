@@ -77,8 +77,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showBottomPresentationIfNeeded() {
-        if (!DeviceDetection.isAnbernicRGDS()) return
-
         val display = DeviceDetection.findSecondaryDisplay(this) ?: return
 
         if (bottomPresentation?.display?.displayId == display.displayId && bottomPresentation?.isShowing == true) {

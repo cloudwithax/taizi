@@ -9,13 +9,17 @@ object DeviceDetection {
 
     fun isAnbernicRGDS(): Boolean {
         val manufacturer = Build.MANUFACTURER.lowercase()
-        val model = Build.MODEL.lowercase()
-        val product = Build.PRODUCT.lowercase()
-
         if (manufacturer.contains("anbernic")) return true
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (Build.SOC_MODEL.equals("RK3568", ignoreCase = true) &&
+                Build.HARDWARE.equals("rk30board", ignoreCase = true)) return true
+        }
+
+        val model = Build.MODEL.lowercase()
         if (model.contains("rg") && model.contains("ds")) return true
 
+        val product = Build.PRODUCT.lowercase()
         if (product.contains("rgds") || product.contains("rg_ds") || product.contains("rg-ds")) return true
 
         return false
@@ -31,14 +35,13 @@ object DeviceDetection {
 
             if (display.flags and Display.FLAG_PRIVATE != 0) continue
 
-            return display
+            if (display.flags and Display.FLAG_PRESENTATION != 0) return display
         }
 
         return null
     }
 
     fun hasMultipleDisplays(context: Context): Boolean {
-        val dm = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return false
-        return dm.displays.count { it.displayId != Display.DEFAULT_DISPLAY } > 0
+        return findSecondaryDisplay(context) != null
     }
 }
