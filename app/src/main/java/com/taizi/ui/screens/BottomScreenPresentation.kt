@@ -3,7 +3,11 @@ package com.taizi.ui.screens
 import android.app.Presentation
 import android.content.Context
 import android.view.Display
+import android.view.KeyEvent
 import android.view.WindowManager
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.setViewTreeOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,8 +43,6 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.activity.OnBackPressedDispatcherOwner
-import androidx.activity.setViewTreeOnBackPressedDispatcherOwner
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -67,8 +69,16 @@ class LauncherPresentation(
     display: Display
 ) : Presentation(outerContext, display) {
 
+    private val backDispatcher = OnBackPressedDispatcher()
+
+    private val backOwner = object : OnBackPressedDispatcherOwner {
+        override val lifecycle get() = lifecycleOwner.lifecycle
+        override val onBackPressedDispatcher = backDispatcher
+    }
+
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        setCancelable(false)
 
         window?.apply {
             addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -78,7 +88,7 @@ class LauncherPresentation(
             setViewTreeLifecycleOwner(lifecycleOwner)
             (lifecycleOwner as? ViewModelStoreOwner)?.let { setViewTreeViewModelStoreOwner(it) }
             (lifecycleOwner as? SavedStateRegistryOwner)?.let { setViewTreeSavedStateRegistryOwner(it) }
-            (lifecycleOwner as? OnBackPressedDispatcherOwner)?.let { setViewTreeOnBackPressedDispatcherOwner(it) }
+            setViewTreeOnBackPressedDispatcherOwner(backOwner)
 
             setContent {
                 TaiziTheme {
@@ -91,6 +101,14 @@ class LauncherPresentation(
         }
 
         setContentView(composeView)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+            backDispatcher.onBackPressed()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onDetachedFromWindow() {

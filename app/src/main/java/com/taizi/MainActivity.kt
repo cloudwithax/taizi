@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -67,6 +68,7 @@ class MainActivity : ComponentActivity() {
                     val granted by storagePermissionGranted
 
                     if (dual) {
+                        BackHandler { }
                         Dashboard(bottomState = viewModel.bottomUiData)
                     } else {
                         if (granted) {
