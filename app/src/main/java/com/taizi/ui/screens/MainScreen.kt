@@ -1,10 +1,6 @@
 package com.taizi.ui.screens
 
-import android.net.Uri
-import android.os.Environment
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -63,31 +59,11 @@ import com.taizi.ui.components.StatusBar
 import com.taizi.ui.theme.BrandAccent
 import com.taizi.ui.theme.TaiziTheme
 
-private fun treeUriToFilePath(uri: Uri): String? {
-    val docId = uri.lastPathSegment ?: return null
-    val split = docId.split(":")
-    if (split.size < 2) return null
-    val volume = split[0]
-    val relativePath = split[1]
-    val root = if (volume == "primary") {
-        Environment.getExternalStorageDirectory().absolutePath
-    } else {
-        "/storage/$volume"
-    }
-    return "$root/$relativePath"
-}
-
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
     val currentScreen by viewModel.currentScreen.collectAsState()
     val scanProgress by viewModel.scanProgress.collectAsState()
-
-    val folderPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        uri?.let { treeUriToFilePath(it) }?.let(viewModel::triggerFullScan)
-    }
 
     BackHandler {
         if (currentScreen !is Screen.SystemList) viewModel.navigateBack()
@@ -112,14 +88,14 @@ fun MainScreen(viewModel: MainViewModel) {
                         when (val state = uiState) {
                             MainUiState.Loading -> Unit
                             MainUiState.Initial -> InitialSetupContent(
-                                onSelectFolder = { folderPickerLauncher.launch(null) }
+                                onSelectFolder = onSelectFolder
                             )
                             MainUiState.Scanning -> ScanningContent(scanProgress)
                             is MainUiState.LibraryLoaded -> SystemListScreen(
                                 systems = viewModel.systemsForDisplay(state.library),
                                 onSystemClick = { viewModel.navigateToSystem(it.id) },
                                 onScanClick = { viewModel.triggerFullScan() },
-                                onSelectFolder = { folderPickerLauncher.launch(null) },
+                                onSelectFolder = onSelectFolder,
                                 onSettingsClick = { viewModel.setScreen(Screen.Settings) },
                                 onSearchClick = { viewModel.setScreen(Screen.Search) },
                                 onAppsClick = { viewModel.setScreen(Screen.AppDrawer) }

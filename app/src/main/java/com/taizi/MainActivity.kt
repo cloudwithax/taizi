@@ -21,7 +21,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
-import com.taizi.ui.screens.BottomScreenPresentation
+import com.taizi.ui.screens.Dashboard
+import com.taizi.ui.screens.LauncherPresentation
 import com.taizi.ui.screens.MainScreen
 import com.taizi.ui.screens.MainViewModel
 import com.taizi.ui.theme.TaiziTheme
@@ -33,7 +34,8 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
     private val storagePermissionGranted = mutableStateOf(false)
-    private var bottomPresentation: BottomScreenPresentation? = null
+    private val isDualScreen = mutableStateOf(false)
+    private var launcherPresentation: LauncherPresentation? = null
 
     private val manageStorageLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -41,10 +43,17 @@ class MainActivity : ComponentActivity() {
         storagePermissionGranted.value = hasStoragePermission()
     }
 
+    private val folderPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let { treeUriToFilePath(it) }?.let(viewModel::triggerFullScan)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         storagePermissionGranted.value = hasStoragePermission()
+        isDualScreen.value = DeviceDetection.findSecondaryDisplay(this) != null
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
@@ -54,11 +63,20 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    val dual by isDualScreen
                     val granted by storagePermissionGranted
-                    if (granted) {
-                        MainScreen(viewModel = viewModel)
+
+                    if (dual) {
+                        Dashboard(bottomState = viewModel.bottomUiData)
                     } else {
-                        StoragePermissionScreen(onRequestPermission = { requestStoragePermission() })
+                        if (granted) {
+                            MainScreen(
+                                viewModel = viewModel,
+                                onSelectFolder = { folderPickerLauncher.launch(null) }
+                            )
+                        } else {
+                            StoragePermissionScreen(onRequestPermission = { requestStoragePermission() })
+                        }
                     }
                 }
             }
@@ -68,26 +86,30 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         storagePermissionGranted.value = hasStoragePermission()
-        showBottomPresentationIfNeeded()
+        showLauncherPresentationIfNeeded()
     }
 
     override fun onPause() {
         super.onPause()
-        dismissBottomPresentation()
+        dismissLauncherPresentation()
     }
 
-    private fun showBottomPresentationIfNeeded() {
+    private fun showLauncherPresentationIfNeeded() {
+        if (!isDualScreen.value) return
+
         val display = DeviceDetection.findSecondaryDisplay(this) ?: return
 
-        if (bottomPresentation?.display?.displayId == display.displayId && bottomPresentation?.isShowing == true) {
+        if (launcherPresentation?.display?.displayId == display.displayId &&
+            launcherPresentation?.isShowing == true) {
             return
         }
 
-        dismissBottomPresentation()
+        dismissLauncherPresentation()
 
-        bottomPresentation = BottomScreenPresentation(
-            bottomState = viewModel.bottomUiData,
+        launcherPresentation = LauncherPresentation(
+            viewModel = viewModel,
             lifecycleOwner = this,
+            onSelectFolder = { folderPickerLauncher.launch(null) },
             outerContext = this,
             display = display
         ).also {
@@ -95,11 +117,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun dismissBottomPresentation() {
-        bottomPresentation?.let {
+    private fun dismissLauncherPresentation() {
+        launcherPresentation?.let {
             if (it.isShowing) it.dismiss()
         }
-        bottomPresentation = null
+        launcherPresentation = null
     }
 
     private fun hasStoragePermission(): Boolean {
@@ -116,6 +138,22 @@ class MainActivity : ComponentActivity() {
                 data = Uri.parse("package:$packageName")
             }
             manageStorageLauncher.launch(intent)
+        }
+    }
+
+    companion object {
+        private fun treeUriToFilePath(uri: Uri): String? {
+            val docId = uri.lastPathSegment ?: return null
+            val split = docId.split(":")
+            if (split.size < 2) return null
+            val volume = split[0]
+            val relativePath = split[1]
+            val root = if (volume == "primary") {
+                Environment.getExternalStorageDirectory().absolutePath
+            } else {
+                "/storage/$volume"
+            }
+            return "$root/$relativePath"
         }
     }
 }

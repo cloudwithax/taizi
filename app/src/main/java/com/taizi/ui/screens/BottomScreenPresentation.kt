@@ -27,12 +27,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +39,8 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.setViewTreeOnBackPressedDispatcherOwner
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -61,9 +59,10 @@ data class BottomUiData(
     val isLibraryLoaded: Boolean = false
 )
 
-class BottomScreenPresentation(
-    private val bottomState: StateFlow<BottomUiData>,
+class LauncherPresentation(
+    private val viewModel: MainViewModel,
     private val lifecycleOwner: LifecycleOwner,
+    private val onSelectFolder: () -> Unit,
     outerContext: Context,
     display: Display
 ) : Presentation(outerContext, display) {
@@ -79,10 +78,14 @@ class BottomScreenPresentation(
             setViewTreeLifecycleOwner(lifecycleOwner)
             (lifecycleOwner as? ViewModelStoreOwner)?.let { setViewTreeViewModelStoreOwner(it) }
             (lifecycleOwner as? SavedStateRegistryOwner)?.let { setViewTreeSavedStateRegistryOwner(it) }
+            (lifecycleOwner as? OnBackPressedDispatcherOwner)?.let { setViewTreeOnBackPressedDispatcherOwner(it) }
 
             setContent {
                 TaiziTheme {
-                    BottomDashboard(bottomState)
+                    LauncherContent(
+                        viewModel = viewModel,
+                        onSelectFolder = onSelectFolder
+                    )
                 }
             }
         }
@@ -97,7 +100,18 @@ class BottomScreenPresentation(
 }
 
 @Composable
-private fun BottomDashboard(bottomState: StateFlow<BottomUiData>) {
+private fun LauncherContent(
+    viewModel: MainViewModel,
+    onSelectFolder: () -> Unit
+) {
+    MainScreen(
+        viewModel = viewModel,
+        onSelectFolder = onSelectFolder
+    )
+}
+
+@Composable
+fun Dashboard(bottomState: StateFlow<BottomUiData>) {
     val data by bottomState.collectAsState()
 
     if (!data.isLibraryLoaded) {
@@ -139,14 +153,11 @@ private fun BottomDashboard(bottomState: StateFlow<BottomUiData>) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            val total = data.systemsCount + data.totalGames + data.favoritesCount
-            val segments = if (total > 0) {
-                listOf(
-                    data.systemsCount to BrandAccent,
-                    data.totalGames to Color(0xFFFFC857),
-                    data.favoritesCount to Color(0xFF5B4BFF)
-                ).filter { it.first > 0 }
-            } else {
+            val segments = listOf(
+                data.systemsCount to BrandAccent,
+                data.totalGames to Color(0xFFFFC857),
+                data.favoritesCount to Color(0xFF5B4BFF)
+            ).filter { it.first > 0 }.ifEmpty {
                 listOf(1 to MaterialTheme.colorScheme.surfaceVariant)
             }
 
@@ -191,25 +202,6 @@ private fun BottomDashboard(bottomState: StateFlow<BottomUiData>) {
                 value = data.favoritesCount.toString(),
                 accent = Color(0xFF5B4BFF)
             )
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                Text(
-                    text = "bottom screen",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                )
-            }
         }
     }
 }
