@@ -9,6 +9,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
@@ -20,14 +21,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import com.taizi.ui.screens.BottomScreenPresentation
 import com.taizi.ui.screens.MainScreen
+import com.taizi.ui.screens.MainViewModel
 import com.taizi.ui.theme.TaiziTheme
+import com.taizi.util.DeviceDetection
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    private val viewModel: MainViewModel by viewModels()
     private val storagePermissionGranted = mutableStateOf(false)
+    private var bottomPresentation: BottomScreenPresentation? = null
 
     private val manageStorageLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -50,7 +56,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val granted by storagePermissionGranted
                     if (granted) {
-                        MainScreen()
+                        MainScreen(viewModel = viewModel)
                     } else {
                         StoragePermissionScreen(onRequestPermission = { requestStoragePermission() })
                     }
@@ -62,6 +68,40 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         storagePermissionGranted.value = hasStoragePermission()
+        showBottomPresentationIfNeeded()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        dismissBottomPresentation()
+    }
+
+    private fun showBottomPresentationIfNeeded() {
+        if (!DeviceDetection.isAnbernicRGDS()) return
+
+        val display = DeviceDetection.findSecondaryDisplay(this) ?: return
+
+        if (bottomPresentation?.display?.displayId == display.displayId && bottomPresentation?.isShowing == true) {
+            return
+        }
+
+        dismissBottomPresentation()
+
+        bottomPresentation = BottomScreenPresentation(
+            bottomState = viewModel.bottomUiData,
+            lifecycleOwner = this,
+            outerContext = this,
+            display = display
+        ).also {
+            it.show()
+        }
+    }
+
+    private fun dismissBottomPresentation() {
+        bottomPresentation?.let {
+            if (it.isShowing) it.dismiss()
+        }
+        bottomPresentation = null
     }
 
     private fun hasStoragePermission(): Boolean {

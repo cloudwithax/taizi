@@ -58,7 +58,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.taizi.R
 import com.taizi.ui.components.StatusBar
 import com.taizi.ui.theme.BrandAccent
@@ -79,7 +78,7 @@ private fun treeUriToFilePath(uri: Uri): String? {
 }
 
 @Composable
-fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
+fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val currentScreen by viewModel.currentScreen.collectAsState()
     val scanProgress by viewModel.scanProgress.collectAsState()
