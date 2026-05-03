@@ -44,7 +44,7 @@ private fun treeUriToFilePath(uri: Uri): String? {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: MainViewModel = hiltViewModel(),
+    viewModel: MainViewModel,
     onNavigateUp: () -> Unit
 ) {
     val context = LocalContext.current

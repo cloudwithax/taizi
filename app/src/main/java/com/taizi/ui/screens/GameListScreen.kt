@@ -78,7 +78,7 @@ import kotlin.math.abs
 @Composable
 fun GameListScreen(
     systemId: String,
-    viewModel: MainViewModel = hiltViewModel(),
+    viewModel: MainViewModel,
     onGameClick: (Game) -> Unit,
     onBack: () -> Unit,
     onRandomClick: (Game) -> Unit

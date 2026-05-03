@@ -53,7 +53,7 @@ import kotlin.math.abs
 fun RouletteScreen(
     systemId: String,
     winner: Game,
-    viewModel: MainViewModel = hiltViewModel(),
+    viewModel: MainViewModel,
     onComplete: (Game) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()

@@ -46,7 +46,7 @@ import com.taizi.ui.theme.accentFor
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    viewModel: MainViewModel = hiltViewModel(),
+    viewModel: MainViewModel,
     onGameClick: (Game) -> Unit,
     onBack: () -> Unit
 ) {

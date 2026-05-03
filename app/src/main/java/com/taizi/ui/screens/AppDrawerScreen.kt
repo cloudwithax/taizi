@@ -67,7 +67,7 @@ data class LaunchableApp(
 @Composable
 fun AppDrawerScreen(
     onBack: () -> Unit,
-    viewModel: MainViewModel = hiltViewModel()
+    viewModel: MainViewModel
 ) {
     val context = LocalContext.current
     var apps by remember { mutableStateOf<List<LaunchableApp>?>(null) }

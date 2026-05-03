@@ -97,7 +97,7 @@ fun SystemListScreen(
     onSearchClick: () -> Unit = {},
     onAppsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: MainViewModel = hiltViewModel()
+    viewModel: MainViewModel
 ) {
     if (systems.isEmpty()) {
         EmptySystems(

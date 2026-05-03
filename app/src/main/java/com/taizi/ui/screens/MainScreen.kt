@@ -98,7 +98,8 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
                                 onSelectFolder = onSelectFolder,
                                 onSettingsClick = { viewModel.setScreen(Screen.Settings) },
                                 onSearchClick = { viewModel.setScreen(Screen.Search) },
-                                onAppsClick = { viewModel.setScreen(Screen.AppDrawer) }
+                                onAppsClick = { viewModel.setScreen(Screen.AppDrawer) },
+                                viewModel = viewModel
                             )
                             is MainUiState.Error -> ErrorContent(
                                 message = state.message,
@@ -140,7 +141,8 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
                         onBack = viewModel::navigateBack
                     )
                     is Screen.AppDrawer -> AppDrawerScreen(
-                        onBack = viewModel::navigateBack
+                        onBack = viewModel::navigateBack,
+                        viewModel = viewModel
                     )
                     else -> Unit
                 }
