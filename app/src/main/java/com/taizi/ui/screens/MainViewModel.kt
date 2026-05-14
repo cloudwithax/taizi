@@ -142,10 +142,6 @@ class MainViewModel @Inject constructor(
         _currentScreen.value = Screen.GameList(systemId)
     }
 
-    fun navigateToRoulette(systemId: String, winner: Game) {
-        _currentScreen.value = Screen.Roulette(systemId, winner)
-    }
-
     fun navigateBack() {
         _currentScreen.value = Screen.SystemList
     }
@@ -345,7 +341,6 @@ class MainViewModel @Inject constructor(
 sealed class Screen {
     object SystemList : Screen()
     data class GameList(val systemId: String) : Screen()
-    data class Roulette(val systemId: String, val winner: Game) : Screen()
     object Settings : Screen()
     object AppDrawer : Screen()
     object Search : Screen()

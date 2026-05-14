@@ -80,8 +80,7 @@ fun GameListScreen(
     systemId: String,
     viewModel: MainViewModel,
     onGameClick: (Game) -> Unit,
-    onBack: () -> Unit,
-    onRandomClick: (Game) -> Unit
+    onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val system = remember(uiState, systemId) { viewModel.getSystemById(systemId) }
@@ -91,6 +90,7 @@ fun GameListScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
+    var randomPick by remember { mutableStateOf<Game?>(null) }
 
     val filteredGames = remember(games, searchQuery, showFavoritesOnly) {
         games.filter { game ->
@@ -131,10 +131,22 @@ fun GameListScreen(
             onToggleFavorites = { showFavoritesOnly = !showFavoritesOnly },
             onRandomClick = {
                 if (games.isNotEmpty()) {
-                    onRandomClick(games.random())
+                    randomPick = games.random()
                 }
             }
         )
+
+        randomPick?.let { picked ->
+            RandomGameDialog(
+                game = picked,
+                accent = accent.primary,
+                onPlay = {
+                    randomPick = null
+                    onGameClick(picked)
+                },
+                onDismiss = { randomPick = null }
+            )
+        }
 
         if (searchOpen) {
             Spacer(modifier = Modifier.height(12.dp))
@@ -478,4 +490,57 @@ private fun EmptyGames(hasQuery: Boolean) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+@Composable
+private fun RandomGameDialog(
+    game: Game,
+    accent: Color,
+    onPlay: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Random pick") },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 140.dp, height = 180.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    if (game.boxArtPath != null) {
+                        AsyncImage(
+                            model = game.boxArtPath,
+                            contentDescription = game.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            filterQuality = FilterQuality.Low
+                        )
+                    } else {
+                        PlaceholderArt(title = game.displayName, accent = accent)
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = game.displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onPlay) { Text("Play") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

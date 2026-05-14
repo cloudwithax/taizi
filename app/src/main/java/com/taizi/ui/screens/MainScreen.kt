@@ -113,20 +113,7 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
                             systemId = systemId,
                             viewModel = viewModel,
                             onGameClick = viewModel::launchGame,
-                            onBack = viewModel::navigateBack,
-                            onRandomClick = { winner -> viewModel.navigateToRoulette(systemId, winner) }
-                        )
-                    }
-                    is Screen.Roulette -> {
-                        val roulette = currentScreen as Screen.Roulette
-                        RouletteScreen(
-                            systemId = roulette.systemId,
-                            winner = roulette.winner,
-                            viewModel = viewModel,
-                            onComplete = { selected ->
-                                viewModel.launchGame(selected)
-                                viewModel.navigateBack()
-                            }
+                            onBack = viewModel::navigateBack
                         )
                     }
                     is Screen.Settings -> SettingsScreen(
