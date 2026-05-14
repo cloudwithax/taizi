@@ -1,10 +1,12 @@
 package com.taizi.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -51,6 +53,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
@@ -94,15 +97,17 @@ fun AppDrawerScreen(
         val app = menuApp!!
         AlertDialog(
             onDismissRequest = { menuApp = null },
+            modifier = Modifier.fillMaxWidth(0.95f),
+            properties = DialogProperties(usePlatformDefaultWidth = false),
             title = { Text(app.label) },
             text = {
                 Column {
                     TextButton(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_DELETE).apply {
-                                data = Uri.parse("package:${app.packageName}")
-                            }
-                            runCatching { context.startActivity(intent) }
+                            val intent = Intent(Intent.ACTION_DELETE)
+                                .setData(Uri.fromParts("package", app.packageName, null))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            launchOrToast(context, intent, "Couldn't open uninstaller")
                             menuApp = null
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -120,10 +125,10 @@ fun AppDrawerScreen(
                     }
                     TextButton(
                         onClick = {
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.parse("package:${app.packageName}")
-                            }
-                            runCatching { context.startActivity(intent) }
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                .setData(Uri.fromParts("package", app.packageName, null))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            launchOrToast(context, intent, "Couldn't open app info")
                             menuApp = null
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -146,11 +151,10 @@ fun AppDrawerScreen(
             packageManager = context.packageManager,
             onDismiss = { activitiesApp = null },
             onLaunch = { activityName ->
-                val intent = Intent(Intent.ACTION_MAIN)
-                    .addCategory(Intent.CATEGORY_LAUNCHER)
+                val intent = Intent()
                     .setClassName(actApp.packageName, activityName)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                runCatching { context.startActivity(intent) }
+                launchOrToast(context, intent, "Couldn't launch ${activityName.substringAfterLast('.')}")
             }
         )
     }
@@ -290,9 +294,15 @@ private fun ActivitiesDialog(
         activities = withContext(Dispatchers.IO) {
             try {
                 val pkgInfo = packageManager.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES)
-                pkgInfo.activities?.map {
-                    (it.loadLabel(packageManager)?.toString() ?: it.name) to it.name
-                }?.sortedBy { it.first } ?: emptyList()
+                pkgInfo.activities
+                    ?.filter { it.exported }
+                    ?.map { info ->
+                        val label = info.loadLabel(packageManager)?.toString()?.takeIf { it.isNotBlank() }
+                            ?: info.name.substringAfterLast('.')
+                        label to info.name
+                    }
+                    ?.sortedBy { it.first.lowercase() }
+                    ?: emptyList()
             } catch (_: Exception) {
                 emptyList()
             }
@@ -301,6 +311,8 @@ private fun ActivitiesDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.fillMaxWidth(0.95f),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         title = { Text("Activities") },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -326,6 +338,14 @@ private fun ActivitiesDialog(
             TextButton(onClick = onDismiss) { Text("Close") }
         }
     )
+}
+
+private fun launchOrToast(context: Context, intent: Intent, failureMessage: String) {
+    try {
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
+    }
 }
 
 private fun loadLaunchableApps(pm: PackageManager): List<LaunchableApp> {
