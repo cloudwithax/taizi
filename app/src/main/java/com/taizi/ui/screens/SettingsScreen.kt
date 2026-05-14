@@ -4,11 +4,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,38 +24,16 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.taizi.BuildConfig
 import com.taizi.data.update.UpdateDownloadState
 
-private fun treeUriToFilePath(uri: Uri): String? {
-    val docId = uri.lastPathSegment ?: return null
-    val split = docId.split(":")
-    if (split.size < 2) return null
-    val volume = split[0]
-    val relativePath = split[1]
-    val root = if (volume == "primary") {
-        Environment.getExternalStorageDirectory().absolutePath
-    } else {
-        "/storage/$volume"
-    }
-    return "$root/$relativePath"
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: MainViewModel,
-    onNavigateUp: () -> Unit
+    onNavigateUp: () -> Unit,
+    onSelectFolder: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val library = viewModel.uiState.collectAsState().value
     val currentLibrary = (library as? MainUiState.LibraryLoaded)?.library
-
-    val folderPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        uri?.let { treeUriToFilePath(it) }?.let { path ->
-            viewModel.triggerFullScan(path)
-            onNavigateUp()
-        }
-    }
 
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf(false) }
@@ -223,7 +198,7 @@ fun SettingsScreen(
                         title = "ROM Root",
                         subtitle = currentLibrary?.romRoot ?: "Not set",
                         icon = MaterialIcons.Filled.Folder,
-                        onClick = { folderPickerLauncher.launch(null) }
+                        onClick = onSelectFolder
                     )
                     SettingsItem(
                         title = "Rescan Library",

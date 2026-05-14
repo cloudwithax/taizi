@@ -131,7 +131,8 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
                     }
                     is Screen.Settings -> SettingsScreen(
                         viewModel = viewModel,
-                        onNavigateUp = viewModel::navigateBack
+                        onNavigateUp = viewModel::navigateBack,
+                        onSelectFolder = onSelectFolder
                     )
                     is Screen.Search -> SearchScreen(
                         viewModel = viewModel,

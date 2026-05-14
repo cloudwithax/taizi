@@ -7,6 +7,8 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.setViewTreeOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -84,6 +86,8 @@ class LauncherPresentation(
             addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
+        val registryOwner = lifecycleOwner as? ActivityResultRegistryOwner
+
         val composeView = ComposeView(context).apply {
             setViewTreeLifecycleOwner(lifecycleOwner)
             (lifecycleOwner as? ViewModelStoreOwner)?.let { setViewTreeViewModelStoreOwner(it) }
@@ -91,11 +95,21 @@ class LauncherPresentation(
             setViewTreeOnBackPressedDispatcherOwner(backOwner)
 
             setContent {
-                TaiziTheme {
-                    LauncherContent(
-                        viewModel = viewModel,
-                        onSelectFolder = onSelectFolder
+                val content = @Composable {
+                    TaiziTheme {
+                        LauncherContent(
+                            viewModel = viewModel,
+                            onSelectFolder = onSelectFolder
+                        )
+                    }
+                }
+                if (registryOwner != null) {
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        LocalActivityResultRegistryOwner provides registryOwner,
+                        content = content
                     )
+                } else {
+                    content()
                 }
             }
         }
