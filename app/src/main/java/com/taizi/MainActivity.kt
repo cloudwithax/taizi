@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.taizi.ui.screens.Dashboard
+import com.taizi.ui.screens.FolderPickerDialog
 import com.taizi.ui.screens.LauncherPresentation
 import com.taizi.ui.screens.MainScreen
 import com.taizi.ui.screens.MainViewModel
@@ -36,18 +38,19 @@ class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
     private val storagePermissionGranted = mutableStateOf(false)
     private val isDualScreen = mutableStateOf(false)
+    private val showFolderPicker = mutableStateOf(false)
+    // When true, the launcher is hosted by LauncherPresentation on the
+    // secondary display and this activity renders the dashboard. When false
+    // (single-screen device, or the secondary display was taken over by
+    // another activity), this activity renders the launcher itself so it
+    // stays reachable.
+    private val launcherInPresentation = mutableStateOf(false)
     private var launcherPresentation: LauncherPresentation? = null
 
     private val manageStorageLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
         storagePermissionGranted.value = hasStoragePermission()
-    }
-
-    private val folderPickerLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        uri?.let { treeUriToFilePath(it) }?.let(viewModel::triggerFullScan)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,24 +63,34 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TaiziTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    val dual by isDualScreen
-                    val granted by storagePermissionGranted
+                val dual by isDualScreen
+                val granted by storagePermissionGranted
+                val pickingFolder by showFolderPicker
+                val inPresentation by launcherInPresentation
 
-                    if (dual) {
-                        BackHandler { }
-                        Dashboard(bottomState = viewModel.bottomUiData)
-                    } else {
-                        if (granted) {
-                            MainScreen(
+                if (pickingFolder) {
+                    FolderPickerDialog(
+                        onSelect = { path ->
+                            showFolderPicker.value = false
+                            viewModel.triggerFullScan(path)
+                        },
+                        onDismiss = { showFolderPicker.value = false }
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        when {
+                            !granted -> StoragePermissionScreen(onRequestPermission = { requestStoragePermission() })
+                            dual && inPresentation -> {
+                                BackHandler { }
+                                Dashboard(bottomState = viewModel.bottomUiData)
+                            }
+                            else -> MainScreen(
                                 viewModel = viewModel,
-                                onSelectFolder = { folderPickerLauncher.launch(null) }
+                                onSelectFolder = { showFolderPicker.value = true }
                             )
-                        } else {
-                            StoragePermissionScreen(onRequestPermission = { requestStoragePermission() })
                         }
                     }
                 }
@@ -91,8 +104,19 @@ class MainActivity : ComponentActivity() {
         showLauncherPresentationIfNeeded()
     }
 
-    override fun onPause() {
-        super.onPause()
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // After regaining focus, the secondary display may have just been
+        // freed (the activity that was on it finished). Retry hosting the
+        // launcher on the secondary display so it migrates back from the
+        // fallback location.
+        if (hasFocus && isDualScreen.value && !launcherInPresentation.value) {
+            showLauncherPresentationIfNeeded()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
         dismissLauncherPresentation()
     }
 
@@ -103,27 +127,49 @@ class MainActivity : ComponentActivity() {
 
         if (launcherPresentation?.display?.displayId == display.displayId &&
             launcherPresentation?.isShowing == true) {
+            launcherInPresentation.value = true
             return
         }
 
         dismissLauncherPresentation()
 
-        launcherPresentation = LauncherPresentation(
+        val presentation = LauncherPresentation(
             viewModel = viewModel,
             lifecycleOwner = this,
-            onSelectFolder = { folderPickerLauncher.launch(null) },
+            onSelectFolder = { showFolderPicker.value = true },
             outerContext = this,
             display = display
-        ).also {
-            it.show()
+        )
+        // The system dismisses a Presentation when its display gets taken
+        // over by another activity. When that happens, fall back to hosting
+        // the launcher on this activity so it remains reachable.
+        presentation.setOnDismissListener {
+            if (launcherPresentation === presentation) {
+                launcherPresentation = null
+            }
+            launcherInPresentation.value = false
+        }
+        try {
+            presentation.show()
+        } catch (_: WindowManager.InvalidDisplayException) {
+            launcherInPresentation.value = false
+            return
+        }
+        if (presentation.isShowing) {
+            launcherPresentation = presentation
+            launcherInPresentation.value = true
+        } else {
+            launcherInPresentation.value = false
         }
     }
 
     private fun dismissLauncherPresentation() {
         launcherPresentation?.let {
+            it.setOnDismissListener(null)
             if (it.isShowing) it.dismiss()
         }
         launcherPresentation = null
+        launcherInPresentation.value = false
     }
 
     private fun hasStoragePermission(): Boolean {
@@ -140,22 +186,6 @@ class MainActivity : ComponentActivity() {
                 data = Uri.parse("package:$packageName")
             }
             manageStorageLauncher.launch(intent)
-        }
-    }
-
-    companion object {
-        private fun treeUriToFilePath(uri: Uri): String? {
-            val docId = uri.lastPathSegment ?: return null
-            val split = docId.split(":")
-            if (split.size < 2) return null
-            val volume = split[0]
-            val relativePath = split[1]
-            val root = if (volume == "primary") {
-                Environment.getExternalStorageDirectory().absolutePath
-            } else {
-                "/storage/$volume"
-            }
-            return "$root/$relativePath"
         }
     }
 }
