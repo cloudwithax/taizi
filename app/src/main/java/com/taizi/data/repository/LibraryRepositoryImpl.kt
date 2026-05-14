@@ -995,8 +995,7 @@ class LibraryRepositoryImpl(
                     onProgress?.invoke(game.name, processed, games.size)
                     if (game.boxArtPath != null) continue
 
-                    val romFileName = File(game.path).name
-                    val info = scraperService.scrapeGame(romFileName, systemId) ?: continue
+                    val info = scraperService.scrapeGame(File(game.path), systemId) ?: continue
                     if (info.boxArtUrl == null) continue
 
                     results.add(ScrapeResult(game, info))
@@ -1087,8 +1086,7 @@ class LibraryRepositoryImpl(
 
                     if (game.boxArtPath != null) continue
 
-                    val romFileName = File(game.path).name
-                    val info = scraperService.scrapeGame(romFileName, systemId) ?: continue
+                    val info = scraperService.scrapeGame(File(game.path), systemId) ?: continue
                     if (info.boxArtUrl == null) continue
 
                     results.add(ScrapeResult(systemId, game, info))

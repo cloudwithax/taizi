@@ -214,17 +214,23 @@ class ScreenScraperService(private val context: Context) {
             .trim()
     }
 
-    suspend fun scrapeGame(romFileName: String, systemId: String): ScrapedGame? = withContext(Dispatchers.IO) {
+    suspend fun scrapeGame(romFile: File, systemId: String): ScrapedGame? = withContext(Dispatchers.IO) {
         val platformId = PLATFORM_IDS[systemId] ?: return@withContext null
 
-        val body = apiGet(
-            "jeuInfos",
-            mapOf(
-                "systemeid" to platformId.toString(),
-                "romnom" to romFileName,
-                "romtype" to "rom"
-            )
-        ) ?: return@withContext null
+        val hash = RomHasher.hash(romFile, systemId)
+        val params = mutableMapOf(
+            "systemeid" to platformId.toString(),
+            "romtype" to "rom",
+            "romnom" to romFile.name
+        )
+        if (hash != null) {
+            params["crc"] = hash.crc32
+            params["romtaille"] = hash.size.toString()
+        } else if (romFile.isFile) {
+            params["romtaille"] = romFile.length().toString()
+        }
+
+        val body = apiGet("jeuInfos", params) ?: return@withContext null
 
         val json = gson.fromJson(body, JsonObject::class.java)
         val response = json.getAsJsonObject("response") ?: return@withContext null
