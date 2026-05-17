@@ -75,9 +75,6 @@ class MainViewModel @Inject constructor(
     private val _scanProgress = MutableStateFlow(ScanProgress())
     val scanProgress: StateFlow<ScanProgress> = _scanProgress.asStateFlow()
 
-    private val _bottomUiData = MutableStateFlow(BottomUiData())
-    val bottomUiData: StateFlow<BottomUiData> = _bottomUiData.asStateFlow()
-
     private val _updateDownloadState = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
     val updateDownloadState: StateFlow<UpdateDownloadState> = _updateDownloadState.asStateFlow()
 
@@ -104,31 +101,6 @@ class MainViewModel @Inject constructor(
             repository.getLibrary().collect { lib ->
                 if (lib.romRoot.isNotEmpty() && _uiState.value is MainUiState.LibraryLoaded) {
                     _uiState.value = MainUiState.LibraryLoaded(lib)
-                }
-            }
-        }
-        viewModelScope.launch {
-            _uiState.collect { state ->
-                _bottomUiData.value = when (state) {
-                    is MainUiState.LibraryLoaded -> {
-                        val lib = state.library
-                        val favs = lib.gamesBySystem.values.sumOf { games -> games.count { it.favorite } }
-                        BottomUiData(
-                            systemsCount = lib.systems.size,
-                            totalGames = lib.gamesBySystem.values.sumOf { it.size },
-                            favoritesCount = favs,
-                            isScanning = false,
-                            isLibraryLoaded = true
-                        )
-                    }
-                    MainUiState.Scanning -> BottomUiData(
-                        isScanning = true,
-                        isLibraryLoaded = false
-                    )
-                    else -> BottomUiData(
-                        isScanning = false,
-                        isLibraryLoaded = false
-                    )
                 }
             }
         }

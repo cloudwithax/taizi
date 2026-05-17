@@ -29,7 +29,6 @@ class LocalDataSource(private val context: Context) {
         val SHOW_BIOS = booleanPreferencesKey("show_bios")
         val FOLDER_DEPTH = intPreferencesKey("folder_depth")
         val AUTO_SCAN_ON_BOOT = booleanPreferencesKey("auto_scan_on_boot")
-        val DUAL_SCREEN_MODE = stringPreferencesKey("dual_screen_mode")
         val SCRAPER_ENABLED = booleanPreferencesKey("scraper_enabled")
         val SCRAPER_ACCOUNT = stringPreferencesKey("scraper_account")
         val CUSTOM_MAPPINGS = stringPreferencesKey("custom_mappings")
