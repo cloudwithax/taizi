@@ -181,13 +181,12 @@ fun SystemListScreen(
             ) { page ->
                 val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
                 val scale = 1f - (pageOffset * 0.1f).coerceAtMost(0.1f)
-                val focusAmount = (1f - pageOffset).coerceIn(0f, 1f)
                 SystemTile(
                     system = systems[page],
                     accent = accentFor(systems[page].id),
                     onClick = { onSystemClick(systems[page]) },
                     scale = scale,
-                    focusAmount = focusAmount
+                    isFocused = page == pagerState.currentPage
                 )
             }
 
@@ -315,7 +314,7 @@ private fun SystemTile(
     accent: SystemAccent,
     onClick: () -> Unit,
     scale: Float = 1f,
-    focusAmount: Float = 1f
+    isFocused: Boolean = false
 ) {
     val imageRes = imageFor(system.id)
 
@@ -324,9 +323,9 @@ private fun SystemTile(
             .fillMaxSize()
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(
-                if (focusAmount > 0f) Modifier.border(
+                if (isFocused) Modifier.border(
                     width = 4.dp,
-                    color = accent.primary.copy(alpha = focusAmount),
+                    color = accent.primary,
                     shape = RoundedCornerShape(28.dp)
                 ) else Modifier
             )
