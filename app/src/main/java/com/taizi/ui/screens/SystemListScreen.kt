@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -322,13 +321,6 @@ private fun SystemTile(
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .then(
-                if (isFocused) Modifier.border(
-                    width = 4.dp,
-                    color = accent.primary,
-                    shape = RoundedCornerShape(28.dp)
-                ) else Modifier
-            )
             .clip(RoundedCornerShape(28.dp))
             .background(
                 Brush.linearGradient(
@@ -341,6 +333,13 @@ private fun SystemTile(
             )
             .clickable { onClick() }
     ) {
+        if (isFocused) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White.copy(alpha = 0.10f))
+            )
+        }
         if (system.id == MainViewModel.FAVORITES_SYSTEM_ID) {
             Icon(
                 imageVector = Icons.Filled.Favorite,
