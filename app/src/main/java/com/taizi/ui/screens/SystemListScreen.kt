@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -180,11 +181,13 @@ fun SystemListScreen(
             ) { page ->
                 val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
                 val scale = 1f - (pageOffset * 0.1f).coerceAtMost(0.1f)
+                val focusAmount = (1f - pageOffset).coerceIn(0f, 1f)
                 SystemTile(
                     system = systems[page],
                     accent = accentFor(systems[page].id),
                     onClick = { onSystemClick(systems[page]) },
-                    scale = scale
+                    scale = scale,
+                    focusAmount = focusAmount
                 )
             }
 
@@ -311,7 +314,8 @@ private fun SystemTile(
     system: System,
     accent: SystemAccent,
     onClick: () -> Unit,
-    scale: Float = 1f
+    scale: Float = 1f,
+    focusAmount: Float = 1f
 ) {
     val imageRes = imageFor(system.id)
 
@@ -319,6 +323,13 @@ private fun SystemTile(
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(
+                if (focusAmount > 0f) Modifier.border(
+                    width = 4.dp,
+                    color = accent.primary.copy(alpha = focusAmount),
+                    shape = RoundedCornerShape(28.dp)
+                ) else Modifier
+            )
             .clip(RoundedCornerShape(28.dp))
             .background(
                 Brush.linearGradient(
