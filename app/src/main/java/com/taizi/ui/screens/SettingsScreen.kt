@@ -10,10 +10,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons as MaterialIcons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.taizi.ui.components.focusHighlight
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -177,7 +180,10 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text("Settings") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
+                    IconButton(
+                        onClick = onNavigateUp,
+                        modifier = Modifier.focusHighlight(shape = CircleShape)
+                    ) {
                         Icon(MaterialIcons.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
@@ -333,6 +339,7 @@ fun SettingsItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusHighlight(shape = RoundedCornerShape(8.dp))
             .clickable { onClick() }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically

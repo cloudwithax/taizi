@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.taizi.ui.components.focusHighlight
 import com.taizi.ui.theme.BrandAccent
 import java.io.File
 
@@ -211,6 +212,7 @@ fun FolderPickerDialog(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
+                            .focusHighlight(shape = RoundedCornerShape(8.dp), accent = Color.White)
                             .background(BrandAccent)
                             .clickable { onSelect(currentPath) }
                             .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -365,6 +367,7 @@ private fun GoUpItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusHighlight(shape = RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -408,6 +411,7 @@ private fun VolumeItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusHighlight(shape = RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -463,6 +467,7 @@ private fun DirectoryRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusHighlight(shape = RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically

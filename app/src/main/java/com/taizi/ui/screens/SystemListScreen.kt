@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.taizi.domain.model.System
+import com.taizi.ui.components.focusHighlight
 import com.taizi.ui.theme.SystemAccent
 import com.taizi.ui.theme.accentFor
 import com.taizi.ui.theme.imageFor
@@ -277,7 +278,9 @@ private fun CircularIconButton(
     Surface(
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.size(40.dp)
+        modifier = Modifier
+            .size(40.dp)
+            .focusHighlight(shape = CircleShape)
     ) {
         IconButton(onClick = onClick) { content() }
     }

@@ -4,7 +4,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,20 +49,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -71,8 +83,10 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.taizi.domain.model.Game
+import com.taizi.ui.components.focusHighlight
 import com.taizi.ui.theme.accentFor
 import kotlin.math.abs
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,6 +124,20 @@ fun GameListScreen(
         snapshotFlow {
             gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
         }.collect { (i, off) -> viewModel.setGameListScroll(systemId, i, off) }
+    }
+
+    val coroutineScope = rememberCoroutineScope()
+    val gridFocusRequester = remember { FocusRequester() }
+    var focusedIndex by remember(systemId) { mutableIntStateOf(initIndex) }
+    LaunchedEffect(filteredGames.size) {
+        if (focusedIndex >= filteredGames.size) {
+            focusedIndex = (filteredGames.size - 1).coerceAtLeast(0)
+        }
+    }
+    LaunchedEffect(systemId) {
+        if (filteredGames.isNotEmpty()) {
+            try { gridFocusRequester.requestFocus() } catch (_: Throwable) { }
+        }
     }
 
     Column(
@@ -165,15 +193,61 @@ fun GameListScreen(
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 128.dp),
             state = gridState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(gridFocusRequester)
+                .focusable()
+                .onKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown || filteredGames.isEmpty()) {
+                        return@onKeyEvent false
+                    }
+                    val visible = gridState.layoutInfo.visibleItemsInfo
+                    val columns = if (visible.isNotEmpty()) {
+                        visible.groupBy { it.row }.values.maxOf { it.size }
+                    } else 1
+                    val curr = focusedIndex.coerceIn(0, filteredGames.size - 1)
+                    val target = when (event.key) {
+                        Key.DirectionDown ->
+                            (curr + columns).coerceAtMost(filteredGames.size - 1)
+                        Key.DirectionUp ->
+                            (curr - columns).coerceAtLeast(0)
+                        Key.DirectionRight -> {
+                            val n = curr + 1
+                            if (n >= filteredGames.size || n / columns != curr / columns) curr
+                            else n
+                        }
+                        Key.DirectionLeft -> {
+                            val p = curr - 1
+                            if (p < 0 || p / columns != curr / columns) curr else p
+                        }
+                        Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
+                            onGameClick(filteredGames[curr])
+                            return@onKeyEvent true
+                        }
+                        else -> return@onKeyEvent false
+                    }
+                    if (target != curr) {
+                        focusedIndex = target
+                        coroutineScope.launch {
+                            val firstVisible = gridState.firstVisibleItemIndex
+                            val lastVisible = gridState.layoutInfo.visibleItemsInfo
+                                .lastOrNull()?.index ?: firstVisible
+                            if (target < firstVisible || target > lastVisible) {
+                                gridState.animateScrollToItem(target)
+                            }
+                        }
+                    }
+                    true
+                },
             verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            items(filteredGames, key = { it.path }) { game ->
+            itemsIndexed(filteredGames, key = { _, game -> game.path }) { index, game ->
                 GameCard(
                     game = game,
                     accent = accent.primary,
+                    isFocused = index == focusedIndex,
                     onClick = { onGameClick(game) },
                     onFavoriteClick = { viewModel.toggleFavorite(game.path, !game.favorite) }
                 )
@@ -291,7 +365,9 @@ private fun RoundIconButton(
     Surface(
         shape = CircleShape,
         color = highlightColor ?: MaterialTheme.colorScheme.surface,
-        modifier = Modifier.size(40.dp)
+        modifier = Modifier
+            .size(40.dp)
+            .focusHighlight(shape = CircleShape)
     ) {
         IconButton(onClick = onClick) { content() }
     }
@@ -336,12 +412,23 @@ internal fun GameCard(
     game: Game,
     accent: Color,
     onClick: () -> Unit,
-    onFavoriteClick: (Boolean) -> Unit
+    onFavoriteClick: (Boolean) -> Unit,
+    isFocused: Boolean = false
 ) {
+    val focusScale by animateFloatAsState(
+        targetValue = if (isFocused) 1.04f else 1f,
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "cardFocusScale"
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
             .clip(RoundedCornerShape(14.dp))
+            .then(
+                if (isFocused) Modifier.border(2.dp, accent, RoundedCornerShape(14.dp))
+                else Modifier.focusHighlight(shape = RoundedCornerShape(14.dp), accent = accent)
+            )
             .clickable { onClick() }
     ) {
         Box(
