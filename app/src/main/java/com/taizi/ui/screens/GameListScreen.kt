@@ -416,19 +416,20 @@ internal fun GameCard(
     isFocused: Boolean = false
 ) {
     val focusScale by animateFloatAsState(
-        targetValue = if (isFocused) 1.04f else 1f,
+        targetValue = if (isFocused) 1.08f else 1f,
         animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
         label = "cardFocusScale"
     )
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .zIndex(if (isFocused) 1f else 0f)
             .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
-            .clip(RoundedCornerShape(14.dp))
             .then(
-                if (isFocused) Modifier.border(2.dp, accent, RoundedCornerShape(14.dp))
+                if (isFocused) Modifier.border(4.dp, accent, RoundedCornerShape(14.dp))
                 else Modifier.focusHighlight(shape = RoundedCornerShape(14.dp), accent = accent)
             )
+            .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() }
     ) {
         Box(
