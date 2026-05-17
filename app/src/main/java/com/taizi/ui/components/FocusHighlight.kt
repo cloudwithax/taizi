@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import com.taizi.ui.theme.BrandAccent
 
 /**
@@ -29,8 +28,8 @@ import com.taizi.ui.theme.BrandAccent
 fun Modifier.focusHighlight(
     shape: Shape = RoundedCornerShape(12.dp),
     accent: Color = BrandAccent,
-    scale: Float = 1.06f,
-    borderWidth: Dp = 3.dp
+    scale: Float = 1.04f,
+    borderWidth: Dp = 2.dp
 ): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
     val animatedScale by animateFloatAsState(
@@ -40,7 +39,6 @@ fun Modifier.focusHighlight(
     )
     this
         .onFocusChanged { focused = it.isFocused }
-        .zIndex(if (focused) 1f else 0f)
         .graphicsLayer { scaleX = animatedScale; scaleY = animatedScale }
         .then(if (focused) Modifier.border(borderWidth, accent, shape) else Modifier)
 }
