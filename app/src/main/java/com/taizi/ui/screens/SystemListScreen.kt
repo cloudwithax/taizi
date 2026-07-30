@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -86,7 +87,16 @@ import com.taizi.ui.theme.accentFor
 import com.taizi.ui.theme.imageFor
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+
+private const val NO_PENDING_PAGE = -1
+
+/** Matches the pager's own snap-settle feel, so d-pad and swipe look alike. */
+private val PageSlideSpec = spring<Float>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMediumLow
+)
 
 @Composable
 fun SystemListScreen(
@@ -127,6 +137,29 @@ fun SystemListScreen(
     val scope = rememberCoroutineScope()
     val view = LocalView.current
 
+    // D-pad paging animates the same way a swipe settles. Repeats chain off the
+    // pending target instead of re-issuing the current one — otherwise each
+    // repeat cancels the in-flight animation and restarts it, which reads as a
+    // snap rather than a slide.
+    var pendingPage by remember { mutableIntStateOf(NO_PENDING_PAGE) }
+    var pageScrollJob by remember { mutableStateOf<Job?>(null) }
+    fun stepPage(delta: Int): Boolean {
+        val base = if (pendingPage == NO_PENDING_PAGE) pagerState.currentPage else pendingPage
+        val target = (base + delta).coerceIn(0, systems.lastIndex)
+        if (target == base) return false
+        pendingPage = target
+        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        pageScrollJob?.cancel()
+        pageScrollJob = scope.launch {
+            try {
+                pagerState.animateScrollToPage(target, animationSpec = PageSlideSpec)
+            } finally {
+                if (pendingPage == target) pendingPage = NO_PENDING_PAGE
+            }
+        }
+        return true
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -158,22 +191,8 @@ fun SystemListScreen(
                     .onKeyEvent { event: androidx.compose.ui.input.key.KeyEvent ->
                         if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                         when (event.key) {
-                            Key.DirectionLeft -> {
-                                val target = (pagerState.currentPage - 1).coerceAtLeast(0)
-                                if (target != pagerState.currentPage) {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                    scope.launch { pagerState.animateScrollToPage(target) }
-                                    true
-                                } else false
-                            }
-                            Key.DirectionRight -> {
-                                val target = (pagerState.currentPage + 1).coerceAtMost(systems.size - 1)
-                                if (target != pagerState.currentPage) {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                    scope.launch { pagerState.animateScrollToPage(target) }
-                                    true
-                                } else false
-                            }
+                            Key.DirectionLeft -> stepPage(-1)
+                            Key.DirectionRight -> stepPage(1)
                             else -> false
                         }
                     }
