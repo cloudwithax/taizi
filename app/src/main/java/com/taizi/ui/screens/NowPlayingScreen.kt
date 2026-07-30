@@ -65,8 +65,10 @@ import coil.compose.AsyncImage
 import com.taizi.data.scraper.ScrapeStatus
 import com.taizi.domain.model.Game
 import com.taizi.ui.components.BackHoldGate
+import com.taizi.ui.components.FullMotionScale
 import com.taizi.ui.theme.accentFor
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /** How long Back must be held before the screen lets go. */
 private const val HOLD_TO_EXIT_MS = 1500
@@ -117,14 +119,19 @@ fun NowPlayingScreen(
     var touchHeld by remember { mutableStateOf(false) }
     val held = backHeld || touchHeld
 
+    // Run the hold timer at full duration even where the system animator scale
+    // is 0 — otherwise it elapses instantly and a tap would leave the screen.
     val holdProgress = remember { Animatable(0f) }
     LaunchedEffect(held) {
-        if (held) {
-            val remaining = ((1f - holdProgress.value) * HOLD_TO_EXIT_MS).toInt()
-            holdProgress.animateTo(1f, tween(remaining.coerceAtLeast(1), easing = LinearEasing))
-            onExit()
-        } else {
-            holdProgress.animateTo(0f, tween(260, easing = FastOutSlowInEasing))
+        withContext(FullMotionScale) {
+            if (held) {
+                val remaining = ((1f - holdProgress.value) * HOLD_TO_EXIT_MS).toInt()
+                holdProgress.animateTo(1f, tween(remaining.coerceAtLeast(1), easing = LinearEasing))
+                if (backHeld) BackHoldGate.drainUntilRelease()
+                onExit()
+            } else {
+                holdProgress.animateTo(0f, tween(260, easing = FastOutSlowInEasing))
+            }
         }
     }
 

@@ -92,12 +92,26 @@ class MainActivity : ComponentActivity() {
      * closes solely on a sustained hold.
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (BackHoldGate.isArmed && event.keyCode == KeyEvent.KEYCODE_BACK) {
+        if (event.keyCode != KeyEvent.KEYCODE_BACK) return super.dispatchKeyEvent(event)
+
+        if (BackHoldGate.isArmed) {
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> BackHoldGate.press()
                 KeyEvent.ACTION_UP -> BackHoldGate.release()
             }
             return true
+        }
+
+        // Swallow what's left of the press that just closed the guard: its own
+        // auto-repeats and its release. A fresh press (repeatCount 0) always
+        // gets through, so a missed release can't wedge the Back button.
+        if (BackHoldGate.isDraining) {
+            if (event.action == KeyEvent.ACTION_UP) {
+                BackHoldGate.endDrain()
+                return true
+            }
+            if (event.repeatCount > 0) return true
+            BackHoldGate.endDrain()
         }
         return super.dispatchKeyEvent(event)
     }

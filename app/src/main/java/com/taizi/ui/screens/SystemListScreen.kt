@@ -81,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.taizi.domain.model.System
+import com.taizi.ui.components.FullMotionScale
 import com.taizi.ui.components.focusHighlight
 import com.taizi.ui.theme.SystemAccent
 import com.taizi.ui.theme.accentFor
@@ -150,7 +151,7 @@ fun SystemListScreen(
         pendingPage = target
         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         pageScrollJob?.cancel()
-        pageScrollJob = scope.launch {
+        pageScrollJob = scope.launch(FullMotionScale) {
             try {
                 pagerState.animateScrollToPage(target, animationSpec = PageSlideSpec)
             } finally {

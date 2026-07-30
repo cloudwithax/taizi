@@ -31,6 +31,19 @@ object BackHoldGate {
         _pressed.value = false
     }
 
+    /**
+     * True between a completed hold and the physical release that follows it.
+     * A held Back key auto-repeats every ~50ms, so without this the repeats
+     * left over after the guard closes would keep backing out of the library.
+     */
+    @Volatile
+    var isDraining: Boolean = false
+        private set
+
+    fun drainUntilRelease() { isDraining = true }
+
+    fun endDrain() { isDraining = false }
+
     fun press() {
         if (_armed.value) _pressed.value = true
     }
