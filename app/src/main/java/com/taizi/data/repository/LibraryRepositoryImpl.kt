@@ -647,6 +647,18 @@ class LibraryRepositoryImpl(
         return _library.value.biosStatus[systemId] ?: BiosStatus.MISSING
     }
 
+    override suspend fun getNowPlayingSystems(): Set<String> = withContext(Dispatchers.IO) {
+        localDataSource.getNowPlayingSystems()
+    }
+
+    override suspend fun setNowPlayingEnabled(systemId: String, enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            val current = localDataSource.getNowPlayingSystems()
+            val updated = if (enabled) current + systemId else current - systemId
+            localDataSource.setNowPlayingSystems(updated)
+        }
+    }
+
     override suspend fun findSystemForFolder(folderName: String): System? {
         return _library.value.systems.firstOrNull { system ->
             system.path.endsWith(folderName, true) ||

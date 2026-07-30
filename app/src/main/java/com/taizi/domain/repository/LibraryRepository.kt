@@ -22,6 +22,8 @@ interface LibraryRepository {
     suspend fun getCustomMappings(): Map<String, String>
     suspend fun saveCustomMappings(mappings: Map<String, String>)
     suspend fun getBiosStatus(systemId: String): BiosStatus
+    suspend fun getNowPlayingSystems(): Set<String>
+    suspend fun setNowPlayingEnabled(systemId: String, enabled: Boolean)
     suspend fun findSystemForFolder(folderName: String): System?
     suspend fun clearCache()
     suspend fun setScraperCredentials(username: String, password: String)

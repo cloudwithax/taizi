@@ -20,7 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.view.KeyEvent
 import androidx.core.view.WindowCompat
+import com.taizi.ui.components.BackHoldGate
 import com.taizi.ui.screens.FolderPickerDialog
 import com.taizi.ui.screens.MainScreen
 import com.taizi.ui.screens.MainViewModel
@@ -82,6 +84,22 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         storagePermissionGranted.value = hasStoragePermission()
+    }
+
+    /**
+     * While the Now Playing screen is up, Back is consumed here and only its
+     * down/up edges are forwarded — a stray tap does nothing, and the screen
+     * closes solely on a sustained hold.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (BackHoldGate.isArmed && event.keyCode == KeyEvent.KEYCODE_BACK) {
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> BackHoldGate.press()
+                KeyEvent.ACTION_UP -> BackHoldGate.release()
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     private fun hasStoragePermission(): Boolean {

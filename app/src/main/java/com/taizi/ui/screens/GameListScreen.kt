@@ -32,9 +32,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -101,6 +103,11 @@ fun GameListScreen(
     val games = remember(uiState, systemId) { viewModel.getGamesForSystem(systemId) }
     val accent = accentFor(systemId)
 
+    // Favorites is a virtual system; the guard belongs to a real console.
+    val nowPlayingSystems by viewModel.nowPlayingSystems.collectAsState()
+    val supportsNowPlaying = systemId != MainViewModel.FAVORITES_SYSTEM_ID
+    val nowPlayingEnabled = systemId in nowPlayingSystems
+
     var searchQuery by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
@@ -139,6 +146,14 @@ fun GameListScreen(
             try { gridFocusRequester.requestFocus() } catch (_: Throwable) { }
         }
     }
+    // The Now Playing guard takes focus while it's up; hand it back to the grid
+    // so the d-pad keeps working after the player holds Back.
+    val guardUp by viewModel.nowPlaying.collectAsState()
+    LaunchedEffect(guardUp == null) {
+        if (guardUp == null && filteredGames.isNotEmpty()) {
+            try { gridFocusRequester.requestFocus() } catch (_: Throwable) { }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -154,6 +169,11 @@ fun GameListScreen(
             accentSecondary = accent.secondary,
             showFavoritesOnly = showFavoritesOnly,
             searchOpen = searchOpen,
+            showNowPlayingToggle = supportsNowPlaying,
+            nowPlayingEnabled = nowPlayingEnabled,
+            onToggleNowPlaying = {
+                viewModel.setNowPlayingEnabled(systemId, !nowPlayingEnabled)
+            },
             onBack = onBack,
             onToggleSearch = { searchOpen = !searchOpen; if (!searchOpen) searchQuery = "" },
             onToggleFavorites = { showFavoritesOnly = !showFavoritesOnly },
@@ -266,6 +286,9 @@ private fun SystemBanner(
     accentSecondary: Color,
     showFavoritesOnly: Boolean,
     searchOpen: Boolean,
+    showNowPlayingToggle: Boolean,
+    nowPlayingEnabled: Boolean,
+    onToggleNowPlaying: () -> Unit,
     onBack: () -> Unit,
     onToggleSearch: () -> Unit,
     onToggleFavorites: () -> Unit,
@@ -352,6 +375,67 @@ private fun SystemBanner(
                     modifier = Modifier.padding(horizontal = 4.dp)
                 )
             }
+            if (showNowPlayingToggle) {
+                Spacer(modifier = Modifier.height(10.dp))
+                NowPlayingChip(
+                    enabled = nowPlayingEnabled,
+                    accent = accentPrimary,
+                    onClick = onToggleNowPlaying
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Opt-in per console: when on, launching a game raises the Now Playing guard so
+ * a dual-screen device's second panel can't be tapped by accident.
+ */
+@Composable
+private fun NowPlayingChip(
+    enabled: Boolean,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(20.dp)
+    Surface(
+        shape = shape,
+        color = if (enabled) accent.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+            .padding(horizontal = 4.dp)
+            .border(
+                width = 1.dp,
+                color = if (enabled) accent else MaterialTheme.colorScheme.outline,
+                shape = shape
+            )
+            .focusHighlight(shape = shape, accent = accent)
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (enabled) Icons.Filled.Lock else Icons.Outlined.LockOpen,
+                contentDescription = null,
+                tint = if (enabled) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(15.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Now Playing screen",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = if (enabled) "ON" else "OFF",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp
+                ),
+                color = if (enabled) accent else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

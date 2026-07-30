@@ -28,6 +28,17 @@ data class ScanProgress(
     val total: Int = 0
 )
 
+/**
+ * Snapshot of the game handed to the emulator, shown by the Now Playing screen.
+ */
+data class NowPlaying(
+    val game: Game,
+    val systemId: String,
+    val systemName: String,
+    val emulatorLabel: String,
+    val startedAt: Long
+)
+
 sealed class MainUiState {
     object Loading : MainUiState()
     object Initial : MainUiState()
@@ -75,6 +86,12 @@ class MainViewModel @Inject constructor(
     private val _scanProgress = MutableStateFlow(ScanProgress())
     val scanProgress: StateFlow<ScanProgress> = _scanProgress.asStateFlow()
 
+    private val _nowPlayingSystems = MutableStateFlow<Set<String>>(emptySet())
+    val nowPlayingSystems: StateFlow<Set<String>> = _nowPlayingSystems.asStateFlow()
+
+    private val _nowPlaying = MutableStateFlow<NowPlaying?>(null)
+    val nowPlaying: StateFlow<NowPlaying?> = _nowPlaying.asStateFlow()
+
     private val _updateDownloadState = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
     val updateDownloadState: StateFlow<UpdateDownloadState> = _updateDownloadState.asStateFlow()
 
@@ -87,6 +104,9 @@ class MainViewModel @Inject constructor(
     private var updateJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            _nowPlayingSystems.value = repository.getNowPlayingSystems()
+        }
         viewModelScope.launch {
             repository.loadCachedLibraryIfAvailable()
             val cached = repository.getLibrary().value
@@ -163,8 +183,30 @@ class MainViewModel @Inject constructor(
             val result = repository.launchGame(game)
             if (result.isFailure) {
                 android.util.Log.e("Taizi", "Launch failed: ${result.exceptionOrNull()?.message}")
+                return@launch
+            }
+            if (game.systemId in _nowPlayingSystems.value) {
+                val system = getSystemById(game.systemId)
+                _nowPlaying.value = NowPlaying(
+                    game = game,
+                    systemId = game.systemId,
+                    systemName = system?.name ?: game.systemId,
+                    emulatorLabel = system?.emulatorType.orEmpty(),
+                    startedAt = java.lang.System.currentTimeMillis()
+                )
             }
         }
+    }
+
+    fun setNowPlayingEnabled(systemId: String, enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setNowPlayingEnabled(systemId, enabled)
+            _nowPlayingSystems.value = repository.getNowPlayingSystems()
+        }
+    }
+
+    fun dismissNowPlaying() {
+        _nowPlaying.value = null
     }
 
     fun toggleFavorite(gamePath: String, favorite: Boolean) {

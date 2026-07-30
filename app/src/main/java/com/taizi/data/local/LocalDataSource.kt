@@ -33,6 +33,7 @@ class LocalDataSource(private val context: Context) {
         val SCRAPER_ACCOUNT = stringPreferencesKey("scraper_account")
         val CUSTOM_MAPPINGS = stringPreferencesKey("custom_mappings")
         val LIBRARY_CACHE = stringPreferencesKey("library_cache_json")
+        val NOW_PLAYING_SYSTEMS = stringSetPreferencesKey("now_playing_systems")
     }
 
     // Settings
@@ -53,6 +54,16 @@ class LocalDataSource(private val context: Context) {
     suspend fun getScraperAccount(): String? {
         val prefs = context.dataStore.data.first()
         return prefs[SCRAPER_ACCOUNT]
+    }
+
+    // Systems whose games open the "Now Playing" guard screen after launch
+    suspend fun getNowPlayingSystems(): Set<String> {
+        val prefs = context.dataStore.data.first()
+        return prefs[NOW_PLAYING_SYSTEMS] ?: emptySet()
+    }
+
+    suspend fun setNowPlayingSystems(systemIds: Set<String>) {
+        context.dataStore.edit { it[NOW_PLAYING_SYSTEMS] = systemIds }
     }
 
     // Library Cache as JSON

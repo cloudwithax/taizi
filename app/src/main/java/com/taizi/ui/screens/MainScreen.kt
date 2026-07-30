@@ -64,76 +64,95 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
     val currentScreen by viewModel.currentScreen.collectAsState()
     val scanProgress by viewModel.scanProgress.collectAsState()
+    val nowPlaying by viewModel.nowPlaying.collectAsState()
+    val scrapeStatus by viewModel.scrapeStatus.collectAsState()
 
-    BackHandler {
+    // Gesture-nav Back is swallowed while the guard is up; the hardware key is
+    // consumed in MainActivity so it can be held instead.
+    BackHandler(enabled = nowPlaying != null) { }
+    BackHandler(enabled = nowPlaying == null) {
         if (currentScreen !is Screen.SystemList) viewModel.navigateBack()
     }
 
     TaiziTheme {
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            topBar = {
-                Box(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)) {
-                    StatusBar()
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                containerColor = MaterialTheme.colorScheme.background,
+                topBar = {
+                    Box(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)) {
+                        StatusBar()
+                    }
                 }
-            }
-        ) { paddingValues ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                when (currentScreen) {
-                    is Screen.SystemList -> {
-                        when (val state = uiState) {
-                            MainUiState.Loading -> Unit
-                            MainUiState.Initial -> InitialSetupContent(
-                                onSelectFolder = onSelectFolder
-                            )
-                            MainUiState.Scanning -> ScanningContent(scanProgress)
-                            is MainUiState.LibraryLoaded -> SystemListScreen(
-                                systems = viewModel.systemsForDisplay(state.library),
-                                onSystemClick = { viewModel.navigateToSystem(it.id) },
-                                onScanClick = { viewModel.triggerFullScan() },
-                                onSelectFolder = onSelectFolder,
-                                onSettingsClick = { viewModel.setScreen(Screen.Settings) },
-                                onSearchClick = { viewModel.setScreen(Screen.Search) },
-                                onAppsClick = { viewModel.setScreen(Screen.AppDrawer) },
-                                viewModel = viewModel
-                            )
-                            is MainUiState.Error -> ErrorContent(
-                                message = state.message,
-                                onRetry = { viewModel.triggerFullScan() }
+            ) { paddingValues ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                ) {
+                    when (currentScreen) {
+                        is Screen.SystemList -> {
+                            when (val state = uiState) {
+                                MainUiState.Loading -> Unit
+                                MainUiState.Initial -> InitialSetupContent(
+                                    onSelectFolder = onSelectFolder
+                                )
+                                MainUiState.Scanning -> ScanningContent(scanProgress)
+                                is MainUiState.LibraryLoaded -> SystemListScreen(
+                                    systems = viewModel.systemsForDisplay(state.library),
+                                    onSystemClick = { viewModel.navigateToSystem(it.id) },
+                                    onScanClick = { viewModel.triggerFullScan() },
+                                    onSelectFolder = onSelectFolder,
+                                    onSettingsClick = { viewModel.setScreen(Screen.Settings) },
+                                    onSearchClick = { viewModel.setScreen(Screen.Search) },
+                                    onAppsClick = { viewModel.setScreen(Screen.AppDrawer) },
+                                    viewModel = viewModel
+                                )
+                                is MainUiState.Error -> ErrorContent(
+                                    message = state.message,
+                                    onRetry = { viewModel.triggerFullScan() }
+                                )
+                            }
+                        }
+                        is Screen.GameList -> {
+                            val systemId = (currentScreen as Screen.GameList).systemId
+                            GameListScreen(
+                                systemId = systemId,
+                                viewModel = viewModel,
+                                onGameClick = viewModel::launchGame,
+                                onBack = viewModel::navigateBack
                             )
                         }
-                    }
-                    is Screen.GameList -> {
-                        val systemId = (currentScreen as Screen.GameList).systemId
-                        GameListScreen(
-                            systemId = systemId,
+                        is Screen.Settings -> SettingsScreen(
                             viewModel = viewModel,
-                            onGameClick = viewModel::launchGame,
+                            onNavigateUp = viewModel::navigateBack,
+                            onSelectFolder = onSelectFolder
+                        )
+                        is Screen.Search -> SearchScreen(
+                            viewModel = viewModel,
+                            onGameClick = { game ->
+                                viewModel.launchGame(game)
+                            },
                             onBack = viewModel::navigateBack
                         )
+                        is Screen.AppDrawer -> AppDrawerScreen(
+                            onBack = viewModel::navigateBack,
+                            viewModel = viewModel
+                        )
+                        else -> Unit
                     }
-                    is Screen.Settings -> SettingsScreen(
-                        viewModel = viewModel,
-                        onNavigateUp = viewModel::navigateBack,
-                        onSelectFolder = onSelectFolder
-                    )
-                    is Screen.Search -> SearchScreen(
-                        viewModel = viewModel,
-                        onGameClick = { game ->
-                            viewModel.launchGame(game)
-                        },
-                        onBack = viewModel::navigateBack
-                    )
-                    is Screen.AppDrawer -> AppDrawerScreen(
-                        onBack = viewModel::navigateBack,
-                        viewModel = viewModel
-                    )
-                    else -> Unit
                 }
+            }
+
+            nowPlaying?.let { playing ->
+                NowPlayingScreen(
+                    game = playing.game,
+                    systemId = playing.systemId,
+                    systemName = playing.systemName,
+                    emulatorLabel = playing.emulatorLabel,
+                    startedAt = playing.startedAt,
+                    scrapeStatus = scrapeStatus,
+                    onExit = viewModel::dismissNowPlaying
+                )
             }
         }
     }
