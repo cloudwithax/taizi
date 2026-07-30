@@ -54,6 +54,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -98,6 +99,14 @@ fun NowPlayingScreen(
     onExit: () -> Unit
 ) {
     val accent = accentFor(systemId)
+
+    // The guard is the second screen's whole job while a game runs, so hold the
+    // display awake for as long as it's up.
+    val view = LocalView.current
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
 
     DisposableEffect(Unit) {
         BackHoldGate.arm()
