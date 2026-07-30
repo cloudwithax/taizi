@@ -46,7 +46,6 @@ crashlytics.properties
 crashlytics-build.properties
 
 # ProGuard
-proguard-rules.pro
 proguard/
 
 # Log files
