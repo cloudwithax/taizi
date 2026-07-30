@@ -71,7 +71,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /** How long Back must be held before the screen lets go. */
-private const val HOLD_TO_EXIT_MS = 750
+private const val HOLD_TO_EXIT_MS = 500
 
 /**
  * Keys swallowed while the guard is up so d-pad / face buttons can't drive the
