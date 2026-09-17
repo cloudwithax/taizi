@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -161,12 +162,17 @@ fun SystemListScreen(
         return true
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
         AccentGlow(accent = focusedAccent)
+
+        // Size the carousel against the viewport rather than a fixed height, so
+        // short screens (a 1080p handheld at native density) keep the metadata
+        // row below it on-screen instead of clipping it off the bottom.
+        val carouselHeight = (maxHeight - 190.dp).coerceIn(140.dp, 300.dp)
 
         Column(modifier = Modifier.fillMaxSize()) {
             LibraryHeader(
@@ -185,7 +191,7 @@ fun SystemListScreen(
                 pageSpacing = 0.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(280.dp)
+                    .height(carouselHeight)
                     .padding(horizontal = 20.dp)
                     .focusRequester(focusRequester)
                     .focusable()
@@ -209,7 +215,7 @@ fun SystemListScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             PagerDots(
                 count = systems.size,
@@ -218,11 +224,11 @@ fun SystemListScreen(
                 pagerState = pagerState
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             FocusedSystemMeta(system = focused)
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

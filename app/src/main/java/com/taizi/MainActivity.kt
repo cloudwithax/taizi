@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.view.KeyEvent
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.taizi.ui.components.BackHoldGate
 import com.taizi.ui.screens.FolderPickerDialog
 import com.taizi.ui.screens.MainScreen
@@ -47,7 +49,7 @@ class MainActivity : ComponentActivity() {
 
         storagePermissionGranted.value = hasStoragePermission()
 
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        hideSystemBars()
 
         setContent {
             TaiziTheme {
@@ -84,6 +86,26 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         storagePermissionGranted.value = hasStoragePermission()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    /**
+     * Taizi renders its own clock/battery/network bar, so the stock system bars
+     * are hidden to give the launcher the whole display. A swipe from either
+     * edge reveals them transiently without leaving the layout permanently
+     * inset. Re-applied on every focus gain so dialogs, the permission screen,
+     * or the system UI can't leave them stuck on.
+     */
+    private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     /**
