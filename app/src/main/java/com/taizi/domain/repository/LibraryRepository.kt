@@ -19,6 +19,8 @@ interface LibraryRepository {
     suspend fun updateGameFavorite(gamePath: String, favorite: Boolean): Result<Unit>
     suspend fun getEmulatorConfig(systemId: String): EmulatorConfig?
     suspend fun setEmulatorConfig(systemId: String, config: EmulatorConfig)
+    suspend fun resetEmulatorConfig(systemId: String): EmulatorConfig?
+    suspend fun getInstalledPlayers(): List<EmulatorConfig>
     suspend fun getCustomMappings(): Map<String, String>
     suspend fun saveCustomMappings(mappings: Map<String, String>)
     suspend fun getBiosStatus(systemId: String): BiosStatus

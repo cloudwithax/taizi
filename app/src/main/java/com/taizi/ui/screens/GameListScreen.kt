@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.AlertDialog
@@ -87,6 +88,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.taizi.domain.model.Game
+import com.taizi.domain.model.System
 import com.taizi.ui.components.focusHighlight
 import com.taizi.ui.theme.accentFor
 import kotlin.math.abs
@@ -114,6 +116,24 @@ fun GameListScreen(
     var searchOpen by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
     var randomPick by remember { mutableStateOf<Game?>(null) }
+    var playerPickerOpen by remember { mutableStateOf(false) }
+    val installedPlayers by viewModel.installedPlayers.collectAsState()
+
+    if (playerPickerOpen && system != null) {
+        PlayerPickerDialog(
+            system = system,
+            players = installedPlayers,
+            onSelect = {
+                viewModel.setSystemPlayer(system.id, it)
+                playerPickerOpen = false
+            },
+            onUseDefault = {
+                viewModel.resetSystemPlayer(system.id)
+                playerPickerOpen = false
+            },
+            onDismiss = { playerPickerOpen = false }
+        )
+    }
 
     val filteredGames = remember(games, searchQuery, showFavoritesOnly) {
         games.filter { game ->
@@ -173,6 +193,11 @@ fun GameListScreen(
             searchOpen = searchOpen,
             showNowPlayingToggle = supportsNowPlaying,
             nowPlayingEnabled = nowPlayingEnabled,
+            showPlayerButton = supportsNowPlaying,
+            onPlayerClick = {
+                viewModel.refreshInstalledPlayers()
+                playerPickerOpen = true
+            },
             onToggleNowPlaying = {
                 viewModel.setNowPlayingEnabled(systemId, !nowPlayingEnabled)
             },
@@ -304,6 +329,8 @@ private fun SystemBanner(
     searchOpen: Boolean,
     showNowPlayingToggle: Boolean,
     nowPlayingEnabled: Boolean,
+    showPlayerButton: Boolean,
+    onPlayerClick: () -> Unit,
     onToggleNowPlaying: () -> Unit,
     onBack: () -> Unit,
     onToggleSearch: () -> Unit,
@@ -363,6 +390,16 @@ private fun SystemBanner(
                     onClick = onToggleNowPlaying
                 )
                 Spacer(modifier = Modifier.width(10.dp))
+            }
+            if (showPlayerButton) {
+                RoundIconButton(onClick = onPlayerClick) {
+                    Icon(
+                        imageVector = Icons.Filled.SportsEsports,
+                        contentDescription = "Choose player",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
             }
             RoundIconButton(
                 onClick = onToggleFavorites,

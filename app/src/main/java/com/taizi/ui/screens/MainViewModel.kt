@@ -92,6 +92,9 @@ class MainViewModel @Inject constructor(
     private val _nowPlaying = MutableStateFlow<NowPlaying?>(null)
     val nowPlaying: StateFlow<NowPlaying?> = _nowPlaying.asStateFlow()
 
+    private val _installedPlayers = MutableStateFlow<List<EmulatorConfig>>(emptyList())
+    val installedPlayers: StateFlow<List<EmulatorConfig>> = _installedPlayers.asStateFlow()
+
     private val _updateDownloadState = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
     val updateDownloadState: StateFlow<UpdateDownloadState> = _updateDownloadState.asStateFlow()
 
@@ -207,6 +210,24 @@ class MainViewModel @Inject constructor(
 
     fun dismissNowPlaying() {
         _nowPlaying.value = null
+    }
+
+    fun refreshInstalledPlayers() {
+        viewModelScope.launch {
+            _installedPlayers.value = repository.getInstalledPlayers()
+        }
+    }
+
+    fun setSystemPlayer(systemId: String, config: EmulatorConfig) {
+        viewModelScope.launch {
+            repository.setEmulatorConfig(systemId, config)
+        }
+    }
+
+    fun resetSystemPlayer(systemId: String) {
+        viewModelScope.launch {
+            repository.resetEmulatorConfig(systemId)
+        }
     }
 
     fun toggleFavorite(gamePath: String, favorite: Boolean) {

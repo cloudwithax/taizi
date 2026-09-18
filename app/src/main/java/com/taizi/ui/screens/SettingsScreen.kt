@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.taizi.BuildConfig
 import com.taizi.data.update.UpdateDownloadState
+import com.taizi.domain.model.System
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,9 +41,27 @@ fun SettingsScreen(
 
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf(false) }
+    var playerSystem by remember { mutableStateOf<System?>(null) }
     val scrapeStatus by viewModel.scrapeStatus.collectAsState()
     val updateDownloadState by viewModel.updateDownloadState.collectAsState()
     val updateCheckResult by viewModel.updateCheckResult.collectAsState()
+    val installedPlayers by viewModel.installedPlayers.collectAsState()
+
+    playerSystem?.let { sys ->
+        PlayerPickerDialog(
+            system = sys,
+            players = installedPlayers,
+            onSelect = {
+                viewModel.setSystemPlayer(sys.id, it)
+                playerSystem = null
+            },
+            onUseDefault = {
+                viewModel.resetSystemPlayer(sys.id)
+                playerSystem = null
+            },
+            onDismiss = { playerSystem = null }
+        )
+    }
 
     val (initIndex, initOffset) = viewModel.getSettingsScroll()
     val listState = rememberLazyListState(
@@ -240,6 +259,37 @@ fun SettingsScreen(
                             icon = MaterialIcons.Filled.Image,
                             onClick = { viewModel.scrapeAll() }
                         )
+                    }
+                }
+            }
+
+            item {
+                SettingsSection(title = "Players") {
+                    val systems = currentLibrary?.systems.orEmpty()
+                    if (systems.isEmpty()) {
+                        Text(
+                            text = "No systems found",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        systems.forEach { sys ->
+                            SettingsItem(
+                                title = sys.name,
+                                subtitle = buildString {
+                                    append(sys.emulatorType.ifBlank { "No player set" })
+                                    sys.emulatorPackage?.let {
+                                        append(" · ")
+                                        append(it)
+                                    }
+                                },
+                                icon = MaterialIcons.Filled.SportsEsports,
+                                onClick = {
+                                    viewModel.refreshInstalledPlayers()
+                                    playerSystem = sys
+                                }
+                            )
+                        }
                     }
                 }
             }

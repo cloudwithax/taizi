@@ -32,6 +32,7 @@ class LocalDataSource(private val context: Context) {
         val SCRAPER_ENABLED = booleanPreferencesKey("scraper_enabled")
         val SCRAPER_ACCOUNT = stringPreferencesKey("scraper_account")
         val CUSTOM_MAPPINGS = stringPreferencesKey("custom_mappings")
+        val EMULATOR_OVERRIDES = stringPreferencesKey("emulator_overrides")
         val LIBRARY_CACHE = stringPreferencesKey("library_cache_json")
         val NOW_PLAYING_SYSTEMS = stringSetPreferencesKey("now_playing_systems")
     }
@@ -107,6 +108,26 @@ class LocalDataSource(private val context: Context) {
         context.dataStore.edit { prefs ->
             val json = gson.toJson(mappings)
             prefs[CUSTOM_MAPPINGS] = json
+        }
+    }
+
+    // Per-system emulator overrides the user picked, keyed by system id. Kept
+    // separate from the library cache so a rescan doesn't wipe the choice.
+    suspend fun getEmulatorOverrides(): Map<String, EmulatorConfig> {
+        val prefs = context.dataStore.data.first()
+        val json = prefs[EMULATOR_OVERRIDES] ?: return emptyMap()
+        return try {
+            val type = object : TypeToken<Map<String, EmulatorConfig>>() {}.type
+            @Suppress("OVERLOAD_RESOLUTION_AMBIGUITY")
+            gson.fromJson(json, type) as? Map<String, EmulatorConfig> ?: emptyMap()
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    suspend fun saveEmulatorOverrides(overrides: Map<String, EmulatorConfig>) {
+        context.dataStore.edit { prefs ->
+            prefs[EMULATOR_OVERRIDES] = gson.toJson(overrides)
         }
     }
 }

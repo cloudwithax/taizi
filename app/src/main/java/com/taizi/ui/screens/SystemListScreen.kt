@@ -200,6 +200,14 @@ fun SystemListScreen(
                         when (event.key) {
                             Key.DirectionLeft -> stepPage(-1)
                             Key.DirectionRight -> stepPage(1)
+                            Key.Enter, Key.NumPadEnter, Key.DirectionCenter, Key.ButtonA -> {
+                                // Confirm opens the system that's actually on
+                                // screen, never the neighbour the pager is
+                                // animating toward.
+                                systems.getOrNull(pagerState.currentPage)
+                                    ?.let { onSystemClick(it) }
+                                true
+                            }
                             else -> false
                         }
                     }

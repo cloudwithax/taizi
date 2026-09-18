@@ -188,9 +188,19 @@ class LibraryRepositoryImpl(
                 // Only surface systems that actually have ROMs on disk, and make
                 // sure romCount reflects the merged total (not the single folder
                 // that scanSystemFolder happened to pick first).
+                val overrides = localDataSource.getEmulatorOverrides()
                 val populatedSystems = systems
                     .filter { (gamesBySystem[it.id]?.size ?: 0) > 0 }
-                    .map { sys -> sys.copy(romCount = gamesBySystem[sys.id]?.size ?: 0) }
+                    .map { sys ->
+                        val merged = sys.copy(romCount = gamesBySystem[sys.id]?.size ?: 0)
+                        overrides[merged.id]?.let { o ->
+                            merged.copy(
+                                emulatorType = o.type,
+                                emulatorPackage = o.packageName,
+                                core = o.core
+                            )
+                        } ?: merged
+                    }
                 val populatedGames = gamesBySystem.filterKeys { id ->
                     populatedSystems.any { it.id == id }
                 }
@@ -446,7 +456,15 @@ class LibraryRepositoryImpl(
             ?: return@withContext Result.failure(Exception("System not found"))
 
         try {
-            val newSystem = scanSystemFolder(File(system.path), localDataSource.getCustomMappings())
+            val scanned = scanSystemFolder(File(system.path), localDataSource.getCustomMappings())
+            val override = localDataSource.getEmulatorOverrides()[systemId]
+            val newSystem = if (scanned != null && override != null) {
+                scanned.copy(
+                    emulatorType = override.type,
+                    emulatorPackage = override.packageName,
+                    core = override.core
+                )
+            } else scanned
             if (newSystem != null) {
                 val newSystems = currentLibrary.systems.map { if (it.id == systemId) newSystem else it }
                 val newGames = collectRomFiles(File(newSystem.path), newSystem.id)
@@ -614,6 +632,38 @@ class LibraryRepositoryImpl(
     }
 
     override suspend fun setEmulatorConfig(systemId: String, config: EmulatorConfig) {
+        val overrides = localDataSource.getEmulatorOverrides().toMutableMap()
+        overrides[systemId] = config
+        localDataSource.saveEmulatorOverrides(overrides)
+        applyEmulatorConfig(systemId, config)
+    }
+
+    override suspend fun resetEmulatorConfig(systemId: String): EmulatorConfig? {
+        val overrides = localDataSource.getEmulatorOverrides().toMutableMap()
+        overrides.remove(systemId)
+        localDataSource.saveEmulatorOverrides(overrides)
+        val def = systemDefinitions[systemId] ?: return null
+        val default = getDefaultEmulatorConfig(def)
+        applyEmulatorConfig(systemId, default)
+        return default
+    }
+
+    override suspend fun getInstalledPlayers(): List<EmulatorConfig> = withContext(Dispatchers.IO) {
+        val players = linkedMapOf<String, EmulatorConfig>()
+        retroArchPackages.forEach { pkg ->
+            if (isPackageInstalled(pkg)) {
+                players[pkg] = EmulatorConfig("RetroArch", pkg, null, true)
+            }
+        }
+        standaloneEmulators.values.flatten().forEach { (pkg, label) ->
+            if (isPackageInstalled(pkg)) {
+                players[pkg] = EmulatorConfig(label, pkg, null, true)
+            }
+        }
+        players.values.toList()
+    }
+
+    private suspend fun applyEmulatorConfig(systemId: String, config: EmulatorConfig) {
         val current = _library.value
         val updated = current.systems.map {
             if (it.id == systemId) it.copy(
