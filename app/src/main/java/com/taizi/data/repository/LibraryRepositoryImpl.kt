@@ -665,13 +665,25 @@ class LibraryRepositoryImpl(
                 }
             }
 
-            // RetroArch variants, paired with this platform's configured core.
+            // RetroArch variants, one entry per known core for the platform.
+            // The system's configured core is kept first so the current
+            // default always shows as selected.
+            val knownCores = (
+                listOfNotNull(def.core) + RetroArchCores.forSystem(systemId)
+            ).distinct()
+
             retroArchPackages.forEach { pkg ->
-                if (isPackageInstalled(pkg)) {
+                if (!isPackageInstalled(pkg)) return@forEach
+                val installed = installedRetroArchCores(pkg)
+                val cores = installed
+                    ?.let { set -> knownCores.filter { it in set } }
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: knownCores
+                cores.forEach { core ->
                     players += EmulatorConfig(
                         type = "RetroArch",
                         packageName = pkg,
-                        core = def.core,
+                        core = core,
                         isInstalled = true
                     )
                 }
@@ -679,6 +691,33 @@ class LibraryRepositoryImpl(
 
             players.toList()
         }
+
+    /**
+     * Core ids present in a RetroArch frontend's cores directory. Returns null
+     * when the directory can't be read (scoped storage), in which case callers
+     * fall back to the static core table.
+     */
+    private fun installedRetroArchCores(packageName: String): Set<String>? {
+        val dirs = listOf(
+            File("/storage/emulated/0/Android/data/$packageName/files/cores"),
+            File("/storage/emulated/0/Android/data/$packageName/cores")
+        )
+        for (dir in dirs) {
+            val files = dir.listFiles() ?: continue
+            val cores = files.mapNotNull { file ->
+                val name = file.name
+                when {
+                    name.endsWith("_libretro_android.so") ->
+                        name.removeSuffix("_libretro_android.so")
+                    name.endsWith("_libretro.so") ->
+                        name.removeSuffix("_libretro.so")
+                    else -> null
+                }
+            }
+            if (cores.isNotEmpty()) return cores.toSet()
+        }
+        return null
+    }
 
     private suspend fun applyEmulatorConfig(systemId: String, config: EmulatorConfig) {
         val current = _library.value
