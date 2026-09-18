@@ -6,9 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.FileObserver
-import android.provider.DocumentsContract
 import android.util.Log
-import androidx.core.content.FileProvider
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.taizi.data.local.BoxArtDao
@@ -535,13 +533,29 @@ class LibraryRepositoryImpl(
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
         }
-        // Standalones (Flycast, DraStic, PPSSPP, Mupen64Plus, Azahar, ...)
-        // all accept a SAF document URI from externalstorage.documents with
-        // a MIME type. Azahar's filter pins "application/octet-stream", the
-        // others accept any wild type, so we use octet-stream for all.
-        val safUri = buildExternalStorageDocumentUri(game.path)
+        // Dolphin (stock and the Handheld build) exposes no file:///content://
+        // VIEW filter. Its MainActivity auto-starts a game from an
+        // "AutoStartFile" extra instead.
+        if (packageName == "org.dolphinemu.dolphinemu" ||
+            packageName == "org.dolphinemu.handheld"
+        ) {
+            return Intent(Intent.ACTION_MAIN).apply {
+                setClassName(packageName, "org.dolphinemu.dolphinemu.ui.main.MainActivity")
+                putExtra("AutoStartFile", game.path)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+        // Standalones (Flycast, DraStic, PPSSPP, Mupen64Plus, Azahar, ...).
+        // All accept a file:// URI with a MIME type. Azahar and the other
+        // Citra-family emulators only advertise content:// in their filters,
+        // so those get their VIEW activity targeted directly. A hand-built
+        // documents URI can't be granted, and Mupen reads its ROM header in a
+        // service that outlives an activity-scoped grant, so file:// is the
+        // right default. TaiziApplication disables file-URI exposure
+        // detection, which is what makes file:// legal to pass across apps.
+        val romUri = Uri.fromFile(File(game.path))
         return Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(safUri, "application/octet-stream")
+            setDataAndType(romUri, "application/octet-stream")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             when (system.emulatorType) {
@@ -563,26 +577,30 @@ class LibraryRepositoryImpl(
                 }
                 else -> {
                     `package` = packageName
+                    if (packageName in contentSchemeOnlyPackages) {
+                        resolveViewActivity(packageName, game)?.let {
+                            setClassName(it.packageName, it.className)
+                        }
+                    }
                 }
             }
         }
     }
 
-    private fun buildExternalStorageDocumentUri(filePath: String): Uri {
-        // /storage/emulated/0/<rest>      -> primary:<rest>
-        // /storage/<volume-id>/<rest>     -> <volume-id>:<rest>
-        val match = Regex("""^/storage/([^/]+)/(.*)$""").find(filePath)
-            ?: throw IllegalArgumentException("Path not under /storage: $filePath")
-        val rawVolume = match.groupValues[1]
-        val rest = match.groupValues[2]
-        val (volume, relative) = if (rawVolume == "emulated") {
-            "primary" to rest.substringAfter("0/", rest)
-        } else {
-            rawVolume to rest
-        }
-        return DocumentsContract.buildDocumentUri(
-            "com.android.externalstorage.documents",
-            "$volume:$relative"
+    /**
+     * The component [packageName] uses for a ROM VIEW intent, matched with a
+     * content:// probe so content-only filters resolve. Used to target the
+     * activity directly when we must hand it a file:// URI instead.
+     */
+    private fun resolveViewActivity(packageName: String, game: Game): android.content.ComponentName? {
+        val probe = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(Uri.parse("content://taizi.rom/${game.name}"), "application/octet-stream")
+            .setPackage(packageName)
+        val resolved = context.packageManager
+            .resolveActivity(probe, PackageManager.MATCH_DEFAULT_ONLY) ?: return null
+        return android.content.ComponentName(
+            resolved.activityInfo.packageName,
+            resolved.activityInfo.name
         )
     }
 
@@ -987,17 +1005,31 @@ class LibraryRepositoryImpl(
         "com.retroarch.ra32"
     )
 
+    // Filters that only declare scheme="content" (Citra-family 3DS emulators).
+    // A file:// URI won't resolve through the filter for these, so the launch
+    // bypasses resolution by targeting the activity that handles the VIEW.
+    private val contentSchemeOnlyPackages = setOf(
+        "io.github.lime3ds.android",
+        "org.azahar_emu.azahar",
+        "org.citra.citra_emu",
+        "org.citra.citra_emu.canary",
+        "org.citra.emu"
+    )
+
     // Map of system id -> ordered list of (package, frontend label) pairs.
     // First installed entry wins. Label is stored verbatim as emulatorType and
     // also drives per-frontend launch behavior in launchGame.
     private val standaloneEmulators: Map<String, List<Pair<String, String>>> = mapOf(
         "psx" to listOf(
             "com.github.stenzek.duckstation" to "DuckStation",
-            "org.duckstation.android" to "DuckStation"
+            "org.duckstation.android" to "DuckStation",
+            "com.epsxe.ePSXe" to "ePSXe",
+            "com.emulators.fpse" to "FPse"
         ),
         "ps2" to listOf(
             "xyz.aethersx2.android" to "AetherSX2",
-            "xyz.netherssx2.android" to "NetherSX2"
+            "xyz.netherssx2.android" to "NetherSX2",
+            "net.armsx2.armsx2" to "ARMSX2"
         ),
         "psp" to listOf(
             "org.ppsspp.ppsspp" to "PPSSPP",
@@ -1009,13 +1041,18 @@ class LibraryRepositoryImpl(
         ),
         "3ds" to listOf(
             "org.azahar_emu.azahar" to "Azahar",
-            "org.citra.citra_emu" to "Citra"
+            "io.github.lime3ds.android" to "Lime3DS",
+            "org.citra.citra_emu" to "Citra",
+            "org.citra.citra_emu.canary" to "Citra Canary",
+            "org.citra.emu" to "Citra MMJ"
         ),
         "gamecube" to listOf(
-            "org.dolphinemu.dolphinemu" to "Dolphin"
+            "org.dolphinemu.dolphinemu" to "Dolphin",
+            "org.dolphinemu.handheld" to "Dolphin Handheld"
         ),
         "wii" to listOf(
-            "org.dolphinemu.dolphinemu" to "Dolphin"
+            "org.dolphinemu.dolphinemu" to "Dolphin",
+            "org.dolphinemu.handheld" to "Dolphin Handheld"
         ),
         "dc" to listOf(
             "com.flycast.emulator" to "Flycast",
@@ -1030,7 +1067,8 @@ class LibraryRepositoryImpl(
         ),
         "saturn" to listOf(
             "org.uoyabause.urern" to "YabaSanshiro",
-            "org.devmiyax.yabasanshiro" to "YabaSanshiro"
+            "org.devmiyax.yabasanshiro" to "YabaSanshiro",
+            "com.ymir.ymir" to "Ymir"
         )
     )
 
