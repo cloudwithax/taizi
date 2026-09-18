@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -79,6 +80,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -210,67 +212,80 @@ fun GameListScreen(
             return@Column
         }
 
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 128.dp),
-            state = gridState,
-            modifier = Modifier
-                .fillMaxSize()
-                .focusRequester(gridFocusRequester)
-                .focusable()
-                .onKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown || filteredGames.isEmpty()) {
-                        return@onKeyEvent false
-                    }
-                    val visible = gridState.layoutInfo.visibleItemsInfo
-                    val columns = if (visible.isNotEmpty()) {
-                        visible.groupBy { it.row }.values.maxOf { it.size }
-                    } else 1
-                    val curr = focusedIndex.coerceIn(0, filteredGames.size - 1)
-                    val target = when (event.key) {
-                        Key.DirectionDown ->
-                            (curr + columns).coerceAtMost(filteredGames.size - 1)
-                        Key.DirectionUp ->
-                            (curr - columns).coerceAtLeast(0)
-                        Key.DirectionRight -> {
-                            val n = curr + 1
-                            if (n >= filteredGames.size || n / columns != curr / columns) curr
-                            else n
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            // Size the grid to the space left under the banner: always a clean
+            // 5 x 2 page (10 games), so a second row is never half cut off.
+            val columnCount = 5
+            val rowCount = 2
+            val gap = 14.dp
+            val edge = 16.dp
+            val cardHeight = (
+                (maxHeight - edge * 2 - gap * (rowCount - 1)) / rowCount
+            ).coerceAtLeast(72.dp)
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columnCount),
+                state = gridState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusRequester(gridFocusRequester)
+                    .focusable()
+                    .onKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown || filteredGames.isEmpty()) {
+                            return@onKeyEvent false
                         }
-                        Key.DirectionLeft -> {
-                            val p = curr - 1
-                            if (p < 0 || p / columns != curr / columns) curr else p
+                        val visible = gridState.layoutInfo.visibleItemsInfo
+                        val cols = if (visible.isNotEmpty()) {
+                            visible.groupBy { it.row }.values.maxOf { it.size }
+                        } else 1
+                        val curr = focusedIndex.coerceIn(0, filteredGames.size - 1)
+                        val target = when (event.key) {
+                            Key.DirectionDown ->
+                                (curr + cols).coerceAtMost(filteredGames.size - 1)
+                            Key.DirectionUp ->
+                                (curr - cols).coerceAtLeast(0)
+                            Key.DirectionRight -> {
+                                val n = curr + 1
+                                if (n >= filteredGames.size || n / cols != curr / cols) curr
+                                else n
+                            }
+                            Key.DirectionLeft -> {
+                                val p = curr - 1
+                                if (p < 0 || p / cols != curr / cols) curr else p
+                            }
+                            Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
+                                onGameClick(filteredGames[curr])
+                                return@onKeyEvent true
+                            }
+                            else -> return@onKeyEvent false
                         }
-                        Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
-                            onGameClick(filteredGames[curr])
-                            return@onKeyEvent true
-                        }
-                        else -> return@onKeyEvent false
-                    }
-                    if (target != curr) {
-                        focusedIndex = target
-                        coroutineScope.launch {
-                            val firstVisible = gridState.firstVisibleItemIndex
-                            val lastVisible = gridState.layoutInfo.visibleItemsInfo
-                                .lastOrNull()?.index ?: firstVisible
-                            if (target < firstVisible || target > lastVisible) {
-                                gridState.animateScrollToItem(target)
+                        if (target != curr) {
+                            focusedIndex = target
+                            coroutineScope.launch {
+                                val firstVisible = gridState.firstVisibleItemIndex
+                                val lastVisible = gridState.layoutInfo.visibleItemsInfo
+                                    .lastOrNull()?.index ?: firstVisible
+                                if (target < firstVisible || target > lastVisible) {
+                                    gridState.animateScrollToItem(target)
+                                }
                             }
                         }
-                    }
-                    true
-                },
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
-        ) {
-            itemsIndexed(filteredGames, key = { _, game -> game.path }) { index, game ->
-                GameCard(
-                    game = game,
-                    accent = accent.primary,
-                    isFocused = index == focusedIndex,
-                    onClick = { onGameClick(game) },
-                    onFavoriteClick = { viewModel.toggleFavorite(game.path, !game.favorite) }
-                )
+                        true
+                    },
+                verticalArrangement = Arrangement.spacedBy(gap),
+                horizontalArrangement = Arrangement.spacedBy(gap),
+                contentPadding = PaddingValues(horizontal = edge, vertical = edge)
+            ) {
+                itemsIndexed(filteredGames, key = { _, game -> game.path }) { index, game ->
+                    GameCard(
+                        game = game,
+                        accent = accent.primary,
+                        isFocused = index == focusedIndex,
+                        onClick = { onGameClick(game) },
+                        onFavoriteClick = { viewModel.toggleFavorite(game.path, !game.favorite) },
+                        cardHeight = cardHeight
+                    )
+                }
             }
         }
     }
@@ -497,7 +512,8 @@ internal fun GameCard(
     accent: Color,
     onClick: () -> Unit,
     onFavoriteClick: (Boolean) -> Unit,
-    isFocused: Boolean = false
+    isFocused: Boolean = false,
+    cardHeight: Dp? = null
 ) {
     val focusScale by animateFloatAsState(
         targetValue = if (isFocused) 1.04f else 1f,
@@ -518,7 +534,10 @@ internal fun GameCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.72f)
+                .then(
+                    if (cardHeight != null) Modifier.height(cardHeight)
+                    else Modifier.aspectRatio(0.72f)
+                )
                 .clip(RoundedCornerShape(14.dp))
                 .background(MaterialTheme.colorScheme.surface)
         ) {
