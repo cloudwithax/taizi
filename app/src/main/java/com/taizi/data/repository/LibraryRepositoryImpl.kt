@@ -648,20 +648,37 @@ class LibraryRepositoryImpl(
         return default
     }
 
-    override suspend fun getInstalledPlayers(): List<EmulatorConfig> = withContext(Dispatchers.IO) {
-        val players = linkedMapOf<String, EmulatorConfig>()
-        retroArchPackages.forEach { pkg ->
-            if (isPackageInstalled(pkg)) {
-                players[pkg] = EmulatorConfig("RetroArch", pkg, null, true)
+    override suspend fun getPlayersForSystem(systemId: String): List<EmulatorConfig> =
+        withContext(Dispatchers.IO) {
+            val def = systemDefinitions[systemId] ?: return@withContext emptyList()
+            val players = linkedSetOf<EmulatorConfig>()
+
+            // Standalones that actually handle this platform, if installed.
+            standaloneEmulators[systemId]?.forEach { (pkg, label) ->
+                if (isPackageInstalled(pkg)) {
+                    players += EmulatorConfig(
+                        type = label,
+                        packageName = pkg,
+                        core = null,
+                        isInstalled = true
+                    )
+                }
             }
-        }
-        standaloneEmulators.values.flatten().forEach { (pkg, label) ->
-            if (isPackageInstalled(pkg)) {
-                players[pkg] = EmulatorConfig(label, pkg, null, true)
+
+            // RetroArch variants, paired with this platform's configured core.
+            retroArchPackages.forEach { pkg ->
+                if (isPackageInstalled(pkg)) {
+                    players += EmulatorConfig(
+                        type = "RetroArch",
+                        packageName = pkg,
+                        core = def.core,
+                        isInstalled = true
+                    )
+                }
             }
+
+            players.toList()
         }
-        players.values.toList()
-    }
 
     private suspend fun applyEmulatorConfig(systemId: String, config: EmulatorConfig) {
         val current = _library.value

@@ -92,8 +92,8 @@ class MainViewModel @Inject constructor(
     private val _nowPlaying = MutableStateFlow<NowPlaying?>(null)
     val nowPlaying: StateFlow<NowPlaying?> = _nowPlaying.asStateFlow()
 
-    private val _installedPlayers = MutableStateFlow<List<EmulatorConfig>>(emptyList())
-    val installedPlayers: StateFlow<List<EmulatorConfig>> = _installedPlayers.asStateFlow()
+    private val _playersForSystem = MutableStateFlow<List<EmulatorConfig>>(emptyList())
+    val playersForSystem: StateFlow<List<EmulatorConfig>> = _playersForSystem.asStateFlow()
 
     private val _updateDownloadState = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
     val updateDownloadState: StateFlow<UpdateDownloadState> = _updateDownloadState.asStateFlow()
@@ -212,9 +212,10 @@ class MainViewModel @Inject constructor(
         _nowPlaying.value = null
     }
 
-    fun refreshInstalledPlayers() {
+    fun refreshPlayersFor(systemId: String) {
+        _playersForSystem.value = emptyList()
         viewModelScope.launch {
-            _installedPlayers.value = repository.getInstalledPlayers()
+            _playersForSystem.value = repository.getPlayersForSystem(systemId)
         }
     }
 

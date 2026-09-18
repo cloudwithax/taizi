@@ -117,12 +117,12 @@ fun GameListScreen(
     var showFavoritesOnly by remember { mutableStateOf(false) }
     var randomPick by remember { mutableStateOf<Game?>(null) }
     var playerPickerOpen by remember { mutableStateOf(false) }
-    val installedPlayers by viewModel.installedPlayers.collectAsState()
+    val players by viewModel.playersForSystem.collectAsState()
 
     if (playerPickerOpen && system != null) {
         PlayerPickerDialog(
             system = system,
-            players = installedPlayers,
+            players = players,
             onSelect = {
                 viewModel.setSystemPlayer(system.id, it)
                 playerPickerOpen = false
@@ -195,7 +195,7 @@ fun GameListScreen(
             nowPlayingEnabled = nowPlayingEnabled,
             showPlayerButton = supportsNowPlaying,
             onPlayerClick = {
-                viewModel.refreshInstalledPlayers()
+                system?.let { viewModel.refreshPlayersFor(it.id) }
                 playerPickerOpen = true
             },
             onToggleNowPlaying = {

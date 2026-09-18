@@ -45,12 +45,12 @@ fun SettingsScreen(
     val scrapeStatus by viewModel.scrapeStatus.collectAsState()
     val updateDownloadState by viewModel.updateDownloadState.collectAsState()
     val updateCheckResult by viewModel.updateCheckResult.collectAsState()
-    val installedPlayers by viewModel.installedPlayers.collectAsState()
+    val players by viewModel.playersForSystem.collectAsState()
 
     playerSystem?.let { sys ->
         PlayerPickerDialog(
             system = sys,
-            players = installedPlayers,
+            players = players,
             onSelect = {
                 viewModel.setSystemPlayer(sys.id, it)
                 playerSystem = null
@@ -285,7 +285,7 @@ fun SettingsScreen(
                                 },
                                 icon = MaterialIcons.Filled.SportsEsports,
                                 onClick = {
-                                    viewModel.refreshInstalledPlayers()
+                                    viewModel.refreshPlayersFor(sys.id)
                                     playerSystem = sys
                                 }
                             )
