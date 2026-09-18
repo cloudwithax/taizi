@@ -234,24 +234,20 @@ fun GameListScreen(
                         if (event.type != KeyEventType.KeyDown || filteredGames.isEmpty()) {
                             return@onKeyEvent false
                         }
-                        val visible = gridState.layoutInfo.visibleItemsInfo
-                        val cols = if (visible.isNotEmpty()) {
-                            visible.groupBy { it.row }.values.maxOf { it.size }
-                        } else 1
                         val curr = focusedIndex.coerceIn(0, filteredGames.size - 1)
                         val target = when (event.key) {
                             Key.DirectionDown ->
-                                (curr + cols).coerceAtMost(filteredGames.size - 1)
+                                (curr + columnCount).coerceAtMost(filteredGames.size - 1)
                             Key.DirectionUp ->
-                                (curr - cols).coerceAtLeast(0)
+                                (curr - columnCount).coerceAtLeast(0)
                             Key.DirectionRight -> {
                                 val n = curr + 1
-                                if (n >= filteredGames.size || n / cols != curr / cols) curr
+                                if (n >= filteredGames.size || n / columnCount != curr / columnCount) curr
                                 else n
                             }
                             Key.DirectionLeft -> {
                                 val p = curr - 1
-                                if (p < 0 || p / cols != curr / cols) curr else p
+                                if (p < 0 || p / columnCount != curr / columnCount) curr else p
                             }
                             Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
                                 onGameClick(filteredGames[curr])
@@ -262,10 +258,15 @@ fun GameListScreen(
                         if (target != curr) {
                             focusedIndex = target
                             coroutineScope.launch {
-                                val firstVisible = gridState.firstVisibleItemIndex
-                                val lastVisible = gridState.layoutInfo.visibleItemsInfo
-                                    .lastOrNull()?.index ?: firstVisible
-                                if (target < firstVisible || target > lastVisible) {
+                                // Keep the selection on screen: scroll whenever the
+                                // target isn't fully inside the viewport, not just
+                                // when it's outside the visible index range.
+                                val layout = gridState.layoutInfo
+                                val item = layout.visibleItemsInfo.firstOrNull { it.index == target }
+                                val fullyVisible = item != null &&
+                                    item.offset.y >= layout.viewportStartOffset &&
+                                    item.offset.y + item.size.height <= layout.viewportEndOffset
+                                if (!fullyVisible) {
                                     gridState.animateScrollToItem(target)
                                 }
                             }
@@ -317,85 +318,82 @@ private fun SystemBanner(
                     colors = listOf(accentSecondary, MaterialTheme.colorScheme.background)
                 )
             )
-            .padding(horizontal = 12.dp, vertical = 12.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RoundIconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = systemName,
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.ExtraBold
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = if (visibleCount == totalCount) "$totalCount games"
-                        else "$visibleCount of $totalCount",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                RoundIconButton(
-                    onClick = onToggleFavorites,
-                    highlightColor = if (showFavoritesOnly) accentPrimary else null
-                ) {
-                    Icon(
-                        imageVector = if (showFavoritesOnly) Icons.Filled.Favorite
-                        else Icons.Outlined.FavoriteBorder,
-                        contentDescription = "Favorites",
-                        tint = if (showFavoritesOnly) Color.White
-                        else MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                RoundIconButton(onClick = onRandomClick) {
-                    Icon(
-                        imageVector = Icons.Filled.Shuffle,
-                        contentDescription = "Random",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                RoundIconButton(
-                    onClick = onToggleSearch,
-                    highlightColor = if (searchOpen) accentPrimary else null
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Search,
-                        contentDescription = "Search",
-                        tint = if (searchOpen) Color.White
-                        else MaterialTheme.colorScheme.onSurface
-                    )
-                }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RoundIconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
             }
-            if (systemPath.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = systemPath,
-                    style = MaterialTheme.typography.labelSmall,
+                    text = systemName,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.ExtraBold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = buildString {
+                        append(
+                            if (visibleCount == totalCount) "$totalCount games"
+                            else "$visibleCount of $totalCount"
+                        )
+                        if (systemPath.isNotBlank()) {
+                            append(" · ")
+                            append(systemPath)
+                        }
+                    },
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 4.dp)
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (showNowPlayingToggle) {
-                Spacer(modifier = Modifier.height(10.dp))
                 NowPlayingChip(
                     enabled = nowPlayingEnabled,
                     accent = accentPrimary,
                     onClick = onToggleNowPlaying
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+            }
+            RoundIconButton(
+                onClick = onToggleFavorites,
+                highlightColor = if (showFavoritesOnly) accentPrimary else null
+            ) {
+                Icon(
+                    imageVector = if (showFavoritesOnly) Icons.Filled.Favorite
+                    else Icons.Outlined.FavoriteBorder,
+                    contentDescription = "Favorites",
+                    tint = if (showFavoritesOnly) Color.White
+                    else MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            RoundIconButton(onClick = onRandomClick) {
+                Icon(
+                    imageVector = Icons.Filled.Shuffle,
+                    contentDescription = "Random",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            RoundIconButton(
+                onClick = onToggleSearch,
+                highlightColor = if (searchOpen) accentPrimary else null
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = "Search",
+                    tint = if (searchOpen) Color.White
+                    else MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -417,7 +415,6 @@ private fun NowPlayingChip(
         shape = shape,
         color = if (enabled) accent.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surface,
         modifier = Modifier
-            .padding(horizontal = 4.dp)
             .border(
                 width = 1.dp,
                 color = if (enabled) accent else MaterialTheme.colorScheme.outline,
@@ -427,22 +424,22 @@ private fun NowPlayingChip(
             .clickable { onClick() }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = if (enabled) Icons.Filled.Lock else Icons.Outlined.LockOpen,
                 contentDescription = null,
                 tint = if (enabled) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(15.dp)
+                modifier = Modifier.size(14.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = "Now Playing screen",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = if (enabled) "ON" else "OFF",
                 style = MaterialTheme.typography.labelMedium.copy(
