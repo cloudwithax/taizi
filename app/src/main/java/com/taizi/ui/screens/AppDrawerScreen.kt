@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -99,44 +101,45 @@ fun AppDrawerScreen(
         val app = menuApp!!
         AlertDialog(
             onDismissRequest = { menuApp = null },
-            modifier = Modifier.fillMaxWidth(0.95f),
+            modifier = Modifier.fillMaxWidth(0.62f),
             properties = DialogProperties(usePlatformDefaultWidth = false),
-            title = { Text(app.label) },
+            // A plain surface at zero tonal elevation. The defaults blend
+            // surfaceTint (the pink primary) into the container, which reads as
+            // maroon rather than a neutral system sheet.
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+            title = { Text("Options") },
             text = {
                 Column {
-                    TextButton(
+                    AppMenuRow(
+                        label = "Uninstall \"${app.label}\"",
                         onClick = {
                             val intent = Intent(Intent.ACTION_DELETE)
                                 .setData(Uri.fromParts("package", app.packageName, null))
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             launchOrToast(context, intent, "Couldn't open uninstaller")
                             menuApp = null
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Uninstall", modifier = Modifier.fillMaxWidth())
-                    }
-                    TextButton(
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AppMenuRow(
+                        label = "View activities",
                         onClick = {
                             activitiesApp = app
                             menuApp = null
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("View Activities", modifier = Modifier.fillMaxWidth())
-                    }
-                    TextButton(
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AppMenuRow(
+                        label = "Application info",
                         onClick = {
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                                 .setData(Uri.fromParts("package", app.packageName, null))
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             launchOrToast(context, intent, "Couldn't open app info")
                             menuApp = null
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Application Info", modifier = Modifier.fillMaxWidth())
-                    }
+                        }
+                    )
                 }
             },
             confirmButton = {},
@@ -237,6 +240,26 @@ fun AppDrawerScreen(
                 }
             }
         }
+    }
+}
+
+/** A plain list row, so the menu reads like a system dialog rather than a stack
+ *  of accent-coloured buttons. Focusable for d-pad, same as PlayerRow. */
+@Composable
+private fun AppMenuRow(label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusHighlight(shape = RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 

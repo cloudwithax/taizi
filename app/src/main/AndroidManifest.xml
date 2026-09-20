@@ -24,6 +24,9 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- App drawer: hand a package to the system uninstaller. Without this the
+         uninstaller activity rejects the caller and finishes silently. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <!-- Query emulator packages for launching ROMs (Android 11+ package visibility) -->
     <queries>
