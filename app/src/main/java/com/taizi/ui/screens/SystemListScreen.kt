@@ -198,8 +198,8 @@ fun SystemListScreen(
                     .onKeyEvent { event: androidx.compose.ui.input.key.KeyEvent ->
                         if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                         when (event.key) {
-                            Key.DirectionLeft -> stepPage(-1)
-                            Key.DirectionRight -> stepPage(1)
+                            Key.DirectionLeft, Key.ButtonL1 -> stepPage(-1)
+                            Key.DirectionRight, Key.ButtonR1 -> stepPage(1)
                             Key.Enter, Key.NumPadEnter, Key.DirectionCenter, Key.ButtonA -> {
                                 // Confirm opens the system that's actually on
                                 // screen, never the neighbour the pager is
