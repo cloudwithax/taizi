@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.FileObserver
 import android.util.Log
+import androidx.core.content.FileProvider
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.taizi.data.local.BoxArtDao
@@ -62,6 +63,12 @@ class LibraryRepositoryImpl(
     // Concurrency limiter to avoid overloading disk
     private val scanSemaphore = Semaphore(4) // Max 4 concurrent system scans
     private val scraperService = ScreenScraperService(context)
+
+    // FileObserver mask for ROM folders. Deliberately excludes access/open
+    // events so scanning a folder doesn't retrigger a scan.
+    private val fileWatchMask = FileObserver.CREATE or FileObserver.DELETE or
+            FileObserver.MOVED_TO or FileObserver.MOVED_FROM or
+            FileObserver.MODIFY or FileObserver.CLOSE_WRITE
 
     init {
         // Nothing auto-started; ViewModel will trigger cache loading
@@ -193,7 +200,7 @@ class LibraryRepositoryImpl(
                         val merged = sys.copy(romCount = gamesBySystem[sys.id]?.size ?: 0)
                         overrides[merged.id]?.let { o ->
                             merged.copy(
-                                emulatorType = o.type,
+                                emulatorType = o.packageName?.let { installedLabel(it) } ?: o.type,
                                 emulatorPackage = o.packageName,
                                 core = o.core
                             )
@@ -458,7 +465,7 @@ class LibraryRepositoryImpl(
             val override = localDataSource.getEmulatorOverrides()[systemId]
             val newSystem = if (scanned != null && override != null) {
                 scanned.copy(
-                    emulatorType = override.type,
+                    emulatorType = override.packageName?.let { installedLabel(it) } ?: override.type,
                     emulatorPackage = override.packageName,
                     core = override.core
                 )
@@ -511,7 +518,7 @@ class LibraryRepositoryImpl(
     }
 
     private fun buildLaunchIntent(system: System, packageName: String, game: Game): Intent {
-        if (system.emulatorType.equals("retroarch", ignoreCase = true)) {
+        if (packageName in retroArchPackages) {
             // RetroArch Android exposes RetroActivityFuture (exported=true) and
             // expects ACTION_MAIN with ROM/LIBRETRO/CONFIGFILE extras. The
             // LIBRETRO extra must be the full path to the core .so file in
@@ -553,20 +560,31 @@ class LibraryRepositoryImpl(
         // service that outlives an activity-scoped grant, so file:// is the
         // right default. TaiziApplication disables file-URI exposure
         // detection, which is what makes file:// legal to pass across apps.
-        val romUri = Uri.fromFile(File(game.path))
+        // The Yuzu-derived Switch emulators read ROMs through the content
+        // resolver (they stat the document), so they get a grantable
+        // FileProvider URI; everyone else gets a plain file:// URI.
+        val romUri = if (packageName in providerUriPackages) {
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                File(game.path)
+            )
+        } else {
+            Uri.fromFile(File(game.path))
+        }
         return Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(romUri, "application/octet-stream")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            when (system.emulatorType) {
-                "Flycast" -> {
+            when (packageName) {
+                "com.flycast.emulator" -> {
                     // Flycast's filter only declares scheme="file" so content://
                     // URIs won't match through filter resolution. Target the
                     // activity directly — its native AndroidStorage only accepts
                     // SAF URIs anyway.
                     setClassName(packageName, "com.flycast.emulator.MainActivity")
                 }
-                "DraStic" -> {
+                "com.dsemu.drastic" -> {
                     // DraStic's filter only matches paths ending in .nds, so
                     // zipped ROMs fail filter resolution. Target the activity
                     // directly — it unzips .zip/.7z/.rar internally via its
@@ -675,7 +693,7 @@ class LibraryRepositoryImpl(
             standaloneEmulators[systemId]?.forEach { (pkg, label) ->
                 if (isPackageInstalled(pkg)) {
                     players += EmulatorConfig(
-                        type = label,
+                        type = installedLabel(pkg) ?: label,
                         packageName = pkg,
                         core = null,
                         isInstalled = true
@@ -699,7 +717,7 @@ class LibraryRepositoryImpl(
                     ?: knownCores
                 cores.forEach { core ->
                     players += EmulatorConfig(
-                        type = "RetroArch",
+                        type = installedLabel(pkg) ?: "RetroArch",
                         packageName = pkg,
                         core = core,
                         isInstalled = true
@@ -797,7 +815,7 @@ class LibraryRepositoryImpl(
         if (!rootFile.exists()) return
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            internalFileObserver = object : FileObserver(rootFile, ALL_EVENTS) {
+            internalFileObserver = object : FileObserver(rootFile, fileWatchMask) {
                 override fun onEvent(event: Int, path: String?) {
                     path ?: return
                     if (shouldIgnorePath(path)) return
@@ -821,13 +839,19 @@ class LibraryRepositoryImpl(
             }
         }
 
-        // Also watch existing system folders (API 29+)
+        // Also watch existing system folders (API 29+). Only file creations,
+        // deletions, moves and writes count — watching ALL_EVENTS makes the
+        // scan's own reads fire events, which re-triggers and cancels the scan
+        // in a loop so it never finishes.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             _library.value.systems.forEach { system ->
                 try {
-                    val sysObserver = object : FileObserver(File(system.path), ALL_EVENTS) {
+                    val sysObserver = object : FileObserver(File(system.path), fileWatchMask) {
                         override fun onEvent(event: Int, path: String?) {
-                            onChange(LibraryChange.MODIFIED)
+                            when (event) {
+                                CREATE, MOVED_TO, DELETE, MOVED_FROM, MODIFY, CLOSE_WRITE ->
+                                    onChange(LibraryChange.MODIFIED)
+                            }
                         }
                     }
                     sysObserver.startWatching()
@@ -861,6 +885,8 @@ class LibraryRepositoryImpl(
             "wii" to SystemDefinition("wii", "Wii", listOf("wii"), listOf(".iso", ".wbfs", ".wad", ".rvz", ".wia"), "retroarch", "dolphin", emptyList(), "wii"),
             "nds" to SystemDefinition("nds", "Nintendo DS", listOf("nds", "nintendo ds", "ndsiware"), listOf(".nds", ".dsi"), "drastic", null, emptyList(), "nds"),
             "3ds" to SystemDefinition("3ds", "Nintendo 3DS", listOf("3ds", "n3ds"), listOf(".3ds", ".cia", ".cci", ".3dsx"), "retroarch", "citra", emptyList(), "3ds"),
+            "switch" to SystemDefinition("switch", "Nintendo Switch", listOf("switch"), listOf(".nsp", ".xci", ".xcz", ".ncz", ".nro", ".nca", ".nso"), "standalone", null, emptyList(), "switch"),
+            "wiiu" to SystemDefinition("wiiu", "Wii U", listOf("wiiu"), listOf(".wud", ".wux", ".wua", ".rpx", ".iso", ".wad"), "standalone", null, emptyList(), "wiiu"),
             "virtualboy" to SystemDefinition("virtualboy", "Virtual Boy", listOf("virtualboy", "virtual boy", "vb"), listOf(".vb", ".vboy"), "retroarch", "beetle_vb", emptyList(), "virtualboy"),
             "pokemini" to SystemDefinition("pokemini", "Pokemon Mini", listOf("pokemini", "pokemonmini", "poke"), listOf(".min"), "retroarch", "pokemini", listOf("bios.min"), "pokemini"),
             "gameandwatch" to SystemDefinition("gameandwatch", "Game & Watch", listOf("gameandwatch", "gw"), listOf(".mgw", ".zip"), "retroarch", "gw", emptyList(), "gameandwatch"),
@@ -869,6 +895,12 @@ class LibraryRepositoryImpl(
             "psx" to SystemDefinition("psx", "PlayStation", listOf("psx", "playstation", "ps1", "psone", "ps"), listOf(".bin", ".img", ".iso", ".cue", ".chd", ".pbp", ".ecm", ".m3u"), "duckstation", "pcsx_rearmed", listOf("scph1001.bin", "scph5501.bin", "scph5502.bin", "scph5552.bin"), "psx"),
             "ps2" to SystemDefinition("ps2", "PlayStation 2", listOf("ps2", "playstation2"), listOf(".iso", ".cso", ".chd", ".bin", ".gz", ".mdf"), "retroarch", "pcsx2", emptyList(), "ps2"),
             "psp" to SystemDefinition("psp", "PlayStation Portable", listOf("psp", "playstationportable", "pspminis"), listOf(".iso", ".cso", ".pbp"), "ppsspp", null, emptyList(), "psp"),
+            "psvita" to SystemDefinition("psvita", "PlayStation Vita", listOf("psvita", "vita", "psv"), listOf(".vpk", ".zip", ".iso"), "standalone", null, emptyList(), "psvita"),
+            "ps3" to SystemDefinition("ps3", "PlayStation 3", listOf("ps3", "playstation3"), listOf(".iso", ".pkg", ".sfo"), "standalone", null, emptyList(), "ps3"),
+
+            // ---------- Microsoft ----------
+            "xbox" to SystemDefinition("xbox", "Xbox", listOf("xbox"), listOf(".iso", ".xiso", ".xbe"), "standalone", null, emptyList(), "xbox"),
+            "xbox360" to SystemDefinition("xbox360", "Xbox 360", listOf("xbox360", "x360", "xbox 360"), listOf(".iso", ".zar", ".xex", ".god", ".stfs"), "standalone", null, emptyList(), "xbox360"),
 
             // ---------- Sega ----------
             "genesis" to SystemDefinition("genesis", "Sega Genesis", listOf("genesis", "megadrive", "md", "mega drive", "sega genesis", "megadriveh", "genesish", "genesiswide", "megadrivejp", "megadrive-japan", "megadrivemsu", "msu-md", "msumd", "genh"), listOf(".md", ".gen", ".smd", ".bin", ".sg"), "retroarch", "genesis_plus_gx", emptyList(), "genesis"),
@@ -995,7 +1027,12 @@ class LibraryRepositoryImpl(
             "gmaster" to SystemDefinition("gmaster", "Hartung Game Master", listOf("gmaster"), listOf(".bin"), "retroarch", "mame", emptyList(), "gmaster"),
             "multivision" to SystemDefinition("multivision", "Tsukuda Multivision", listOf("multivision"), listOf(".bin"), "retroarch", "mame", emptyList(), "multivision"),
             "j2me" to SystemDefinition("j2me", "Java ME", listOf("j2me", "freej2me", "java"), listOf(".jar"), "retroarch", "freej2me", emptyList(), "j2me"),
-            "openbor" to SystemDefinition("openbor", "OpenBOR", listOf("openbor"), listOf(".pak"), "retroarch", "openbor", emptyList(), "openbor")
+            "openbor" to SystemDefinition("openbor", "OpenBOR", listOf("openbor"), listOf(".pak"), "retroarch", "openbor", emptyList(), "openbor"),
+
+            // ---------- Ports / game engines ----------
+            "ports" to SystemDefinition("ports", "Ports", listOf("ports", "port"), listOf(".pak", ".wad", ".pk3", ".sh"), "standalone", null, emptyList(), "ports"),
+            "doom" to SystemDefinition("doom", "Doom", listOf("doom", "prboom", "gzdoom", "eduke32"), listOf(".wad", ".pk3", ".pk7", ".lmp"), "standalone", "prboom", emptyList(), "doom"),
+            "quake" to SystemDefinition("quake", "Quake", listOf("quake"), listOf(".pak"), "standalone", "tyrquake", emptyList(), "quake")
         )
     }
 
@@ -1005,54 +1042,211 @@ class LibraryRepositoryImpl(
         "com.retroarch.ra32"
     )
 
-    // Filters that only declare scheme="content" (Citra-family 3DS emulators).
-    // A file:// URI won't resolve through the filter for these, so the launch
-    // bypasses resolution by targeting the activity that handles the VIEW.
+    // Filters that only declare scheme="content" (the Citra-family 3DS
+    // emulators and Skyline/Strato). A file:// URI won't resolve through the
+    // filter for these, so the launch bypasses resolution by targeting the
+    // activity that handles the VIEW. These accept a raw file path.
     private val contentSchemeOnlyPackages = setOf(
         "io.github.lime3ds.android",
         "org.azahar_emu.azahar",
         "org.citra.citra_emu",
         "org.citra.citra_emu.canary",
-        "org.citra.emu"
+        "org.citra.emu",
+        "org.stratoemu.strato",
+        "skyline.emu"
     )
 
-    // Map of system id -> ordered list of (package, frontend label) pairs.
-    // First installed entry wins. Label is stored verbatim as emulatorType and
-    // also drives per-frontend launch behavior in launchGame.
+    // Yuzu-derived Switch emulators read ROMs via the content resolver and
+    // need a content:// document they can stat, so they get a FileProvider URI.
+    private val providerUriPackages = setOf(
+        "com.antutu.ABenchMark",
+        "org.citron.citron_emu",
+        "org.citron.citron_emu.ea",
+        "org.sudachi.sudachi_emu",
+        "org.yuzu.yuzu_emu",
+        "dev.suyu.suyu_emu",
+        "org.suyu.suyu_emu",
+        "dev.eden.eden_emulator",
+        "dev.legacy.eden_emulator",
+        "org.kenjinx.android"
+    )
+
+    // Map of system id -> ordered list of (package, fallback label) pairs.
+    // First installed entry wins. The displayed name is read from the installed
+    // app itself (falling back to the label here), so rebranded or disguised
+    // packages still show the right name. Launch behavior keys off packageName,
+    // never the label.
     private val standaloneEmulators: Map<String, List<Pair<String, String>>> = mapOf(
+        // ---------- Nintendo ----------
+        "nes" to listOf(
+            "com.explusalpha.NesEmu" to "NES.emu",
+            "com.androidemu.nes" to "NESoid"
+        ),
+        "fds" to listOf(
+            "com.explusalpha.NesEmu" to "NES.emu"
+        ),
+        "snes" to listOf(
+            "com.explusalpha.Snes9xPlus" to "Snes9x EX+"
+        ),
+        "gb" to listOf(
+            "it.dbtecno.pizzaboypro" to "Pizza Boy C Pro",
+            "it.dbtecno.pizzaboy" to "Pizza Boy C",
+            "com.explusalpha.GbcEmu" to "GBC.emu",
+            "com.fastemulator.gbc" to "My OldBoy!",
+            "com.sky.SkyEmu" to "SkyEmu",
+            "com.pixelrespawn.linkboy" to "Linkboy"
+        ),
+        "gbc" to listOf(
+            "it.dbtecno.pizzaboypro" to "Pizza Boy C Pro",
+            "it.dbtecno.pizzaboy" to "Pizza Boy C",
+            "com.explusalpha.GbcEmu" to "GBC.emu",
+            "com.fastemulator.gbc" to "My OldBoy!",
+            "com.sky.SkyEmu" to "SkyEmu",
+            "com.pixelrespawn.linkboy" to "Linkboy"
+        ),
+        "gba" to listOf(
+            "it.dbtecno.pizzaboygbapro" to "Pizza Boy GBA Pro",
+            "it.dbtecno.pizzaboygba" to "Pizza Boy GBA",
+            "com.explusalpha.GbaEmu" to "GBA.emu",
+            "com.fastemulator.gba" to "My Boy!",
+            "com.sky.SkyEmu" to "SkyEmu",
+            "com.pixelrespawn.linkboy" to "Linkboy"
+        ),
+        "nds" to listOf(
+            "com.dsemu.drastic" to "DraStic",
+            "me.magnum.melonds" to "melonDS",
+            "me.magnum.melonds.nightly" to "melonDS",
+            "me.magnum.melonds.dev" to "melonDS",
+            "me.magnum.melondualds" to "MelonDualDS",
+            "com.hydra.noods" to "NooDS",
+            "com.dsmile.emulator" to "DSmile",
+            "com.sky.SkyEmu" to "SkyEmu"
+        ),
+        "3ds" to listOf(
+            "org.azahar_emu.azahar" to "Azahar",
+            "io.github.lime3ds.android" to "Azahar",
+            "io.github.azaharplus.android" to "Azahar Plus",
+            "io.github.borked3ds.android" to "Borked3DS",
+            "io.github.mandarine3ds.mandarine" to "Mandarine",
+            "org.citra.citra_emu" to "Citra",
+            "org.citra.citra_emu.canary" to "Citra Canary",
+            "org.citra.emu" to "Citra MMJ",
+            "com.panda3ds.pandroid" to "Panda3DS",
+            "org.lemonade.lemonade_emu" to "Lemonade",
+            "org.lemonade.lemonade_emu.canary" to "Lemonade Canary"
+        ),
+        "n64" to listOf(
+            "org.mupen64plusae.v3.fzurita" to "Mupen64Plus FZ",
+            "org.mupen64plusae.v3.fzurita.pro" to "Mupen64Plus FZ Pro",
+            "org.mupen64plusae.v3.alpha" to "Mupen64Plus AE"
+        ),
+        "gamecube" to listOf(
+            "org.dolphinemu.dolphinemu" to "Dolphin",
+            "org.dolphinemu.handheld" to "Dolphin Handheld",
+            "org.mm.jr" to "Dolphin MMJR",
+            "org.dolphinemu.mmjr" to "Dolphin MMJR2",
+            "org.dolphinemu.mmjr3" to "Dolphin MMJR3",
+            "org.dolphin.ishiirukadark" to "Dolphin Ishiiruka",
+            "org.dolphinemu.primehack" to "PrimeHack",
+            "com.joeyos.dolphinemu" to "DolphinCS"
+        ),
+        "wii" to listOf(
+            "org.dolphinemu.dolphinemu" to "Dolphin",
+            "org.dolphinemu.handheld" to "Dolphin Handheld",
+            "org.mm.jr" to "Dolphin MMJR",
+            "org.dolphinemu.mmjr" to "Dolphin MMJR2",
+            "org.dolphinemu.mmjr3" to "Dolphin MMJR3",
+            "org.dolphin.ishiirukadark" to "Dolphin Ishiiruka",
+            "org.dolphinemu.primehack" to "PrimeHack",
+            "com.joeyos.dolphinemu" to "DolphinCS"
+        ),
+        "switch" to listOf(
+            "org.citron.citron_emu" to "Citron",
+            "org.citron.citron_emu.ea" to "Citron",
+            "com.antutu.ABenchMark" to "Citron",
+            "org.sudachi.sudachi_emu" to "Sudachi",
+            "dev.eden.eden_emulator" to "Eden",
+            "dev.legacy.eden_emulator" to "Eden",
+            "dev.suyu.suyu_emu" to "Suyu",
+            "org.suyu.suyu_emu" to "Suyu",
+            "org.stratoemu.strato" to "Strato",
+            "skyline.emu" to "Skyline",
+            "org.yuzu.yuzu_emu" to "Yuzu",
+            "org.kenjinx.android" to "Kenji-NX"
+        ),
+        "wiiu" to listOf(
+            "info.cemu.cemu" to "Cemu"
+        ),
+
+        // ---------- Sony ----------
         "psx" to listOf(
             "com.github.stenzek.duckstation" to "DuckStation",
             "org.duckstation.android" to "DuckStation",
             "com.epsxe.ePSXe" to "ePSXe",
-            "com.emulators.fpse" to "FPse"
+            "com.emulator.fpse" to "FPse",
+            "com.emulator.fpse64" to "FPse64",
+            "com.nanodata.armsx" to "ARMSX1"
         ),
         "ps2" to listOf(
             "xyz.aethersx2.android" to "AetherSX2",
-            "xyz.netherssx2.android" to "NetherSX2",
-            "net.armsx2.armsx2" to "ARMSX2"
+            "come.nanodata.armsx2" to "ARMSX2",
+            "com.armsx2" to "ARMSX2",
+            "com.virtualapplications.play" to "Play!",
+            "com.sbro.emucorex" to "EmuCoreX"
         ),
         "psp" to listOf(
             "org.ppsspp.ppsspp" to "PPSSPP",
-            "org.ppsspp.ppssppgold" to "PPSSPP"
+            "org.ppsspp.ppssppgold" to "PPSSPP Gold",
+            "org.ppsspp.ppsspplegacy" to "PPSSPP"
         ),
-        "nds" to listOf(
-            "com.dsemu.drastic" to "DraStic",
-            "me.magnum.melonds" to "melonDS"
+        "psvita" to listOf(
+            "org.vita3k.emulator" to "Vita3K",
+            "org.vita3k.emulator.ikhoeyZX" to "Vita3K ZX",
+            "com.sbro.emucorev" to "EmuCoreV"
         ),
-        "3ds" to listOf(
-            "org.azahar_emu.azahar" to "Azahar",
-            "io.github.lime3ds.android" to "Lime3DS",
-            "org.citra.citra_emu" to "Citra",
-            "org.citra.citra_emu.canary" to "Citra Canary",
-            "org.citra.emu" to "Citra MMJ"
+        "ps3" to listOf(
+            "aenu.aps3e" to "aPS3e",
+            "aenu.aps3e.premium" to "aPS3e Premium",
+            "net.rpcsx" to "RPCSX",
+            "net.rpcsx.clanker" to "RPCSX",
+            "com.armsx3" to "ARMSX3",
+            "com.sbro.emucorec" to "EmuCoreC"
         ),
-        "gamecube" to listOf(
-            "org.dolphinemu.dolphinemu" to "Dolphin",
-            "org.dolphinemu.handheld" to "Dolphin Handheld"
+
+        // ---------- Microsoft ----------
+        "xbox" to listOf(
+            "com.izzy2lost.x1box" to "X1 BOX",
+            "emu.xbox.og" to "X-OG Mobile",
+            "com.rfandango.haku_x" to "hakuX",
+            "Ali.Xanite" to "Xenra",
+            "Ali.Xanite.green" to "Xenra"
         ),
-        "wii" to listOf(
-            "org.dolphinemu.dolphinemu" to "Dolphin",
-            "org.dolphinemu.handheld" to "Dolphin Handheld"
+        "xbox360" to listOf(
+            "aenu.ax360e" to "ax360e",
+            "aenu.ax360e.free" to "ax360e",
+            "xendroid.compose" to "XenDroid",
+            "emu.x360mobile.com" to "X360 Mobile",
+            "emu.x360.mobile" to "X360 Mobile",
+            "emu.x360mobile.controller" to "X360 Mobile"
+        ),
+
+        // ---------- Sega ----------
+        "genesis" to listOf(
+            "com.explusalpha.MdEmu" to "MD.emu",
+            "com.androidemu.gens" to "Gensoid",
+            "it.dbtecno.pizzaboyscpro" to "Pizza Boy SC Pro"
+        ),
+        "sms" to listOf(
+            "com.fms.mg" to "MasterGear"
+        ),
+        "gamegear" to listOf(
+            "com.fms.mg" to "MasterGear"
+        ),
+        "saturn" to listOf(
+            "org.devmiyax.yabasanshioro2" to "YabaSanshiro 2",
+            "org.devmiyax.yabasanshioro2.pro" to "YabaSanshiro 2 Pro",
+            "org.uoyabause.android" to "YabaSanshiro",
+            "com.explusalpha.SaturnEmu" to "Saturn.emu"
         ),
         "dc" to listOf(
             "com.flycast.emulator" to "Flycast",
@@ -1061,14 +1255,77 @@ class LibraryRepositoryImpl(
         "naomi" to listOf(
             "com.flycast.emulator" to "Flycast"
         ),
-        "n64" to listOf(
-            "org.mupen64plusae.v3.fzurita" to "Mupen64Plus FZ",
-            "org.mupen64plusae.v3.alpha" to "Mupen64Plus AE"
+
+        // ---------- NEC ----------
+        "pce" to listOf(
+            "com.PceEmu" to "PCE.emu",
+            "com.explusalpha.PceEmu" to "PCE.emu"
         ),
-        "saturn" to listOf(
-            "org.uoyabause.urern" to "YabaSanshiro",
-            "org.devmiyax.yabasanshiro" to "YabaSanshiro",
-            "com.ymir.ymir" to "Ymir"
+
+        // ---------- Atari ----------
+        "atari2600" to listOf(
+            "com.explusalpha.A2600Emu" to "2600.emu"
+        ),
+        "lynx" to listOf(
+            "com.explusalpha.LynxEmu" to "Lynx.emu"
+        ),
+
+        // ---------- SNK ----------
+        "neogeo" to listOf(
+            "com.explusalpha.NeoEmu" to "NEO.emu"
+        ),
+        "ngpc" to listOf(
+            "com.explusalpha.NgpEmu" to "NGP.emu"
+        ),
+
+        // ---------- Arcade ----------
+        "mame" to listOf(
+            "com.seleuco.mame4droid" to "MAME4droid",
+            "com.seleuco.mame4d2024" to "MAME4droid 2024"
+        ),
+
+        // ---------- Computers / misc ----------
+        "c64" to listOf(
+            "com.explusalpha.C64Emu" to "C64.emu"
+        ),
+        "msx" to listOf(
+            "com.explusalpha.MsxEmu" to "MSX.emu"
+        ),
+        "msx2" to listOf(
+            "com.explusalpha.MsxEmu" to "MSX.emu"
+        ),
+        "wonderswan" to listOf(
+            "com.explusalpha.SwanEmu" to "Swan.emu"
+        ),
+        "virtualboy" to listOf(
+            "com.simongellis.vvb" to "Virtual Virtual Boy"
+        ),
+        "pico8" to listOf(
+            "io.wip.pico8" to "PICO-8"
+        ),
+        "j2me" to listOf(
+            "ru.playsoftware.j2meloader" to "J2ME Loader",
+            "ru.woesss.j2meloader" to "J2ME Loader"
+        ),
+
+        // ---------- Ports / game engines ----------
+        "ports" to listOf(
+            "org.openbor.engine" to "OpenBOR",
+            "com.opentouchgaming.deltatouch" to "Delta Touch",
+            "com.opentouchgaming.quadtouch" to "Quad Touch",
+            "is.xyz.omw" to "OpenMW",
+            "is.xyz.omw.nightly" to "OpenMW",
+            "org.diasurgical.devilutionx" to "DevilutionX",
+            "org.solarus_games.solarus" to "Solarus",
+            "ru.wohlsoft.thextech.fdroid" to "TheXTech",
+            "org.easyrpg.player" to "EasyRPG Player",
+            "com.karin.idTech4Amm" to "idTech4A++"
+        ),
+        "doom" to listOf(
+            "com.opentouchgaming.deltatouch" to "Delta Touch"
+        ),
+        "quake" to listOf(
+            "com.opentouchgaming.quadtouch" to "Quad Touch"
         )
     )
 
@@ -1081,6 +1338,18 @@ class LibraryRepositoryImpl(
         }
     }
 
+    /**
+     * The app's own display name, so a rebranded or disguised package (e.g.
+     * Citron shipping as com.antutu.ABenchMark) still shows the right name.
+     */
+    private fun installedLabel(packageName: String): String? = try {
+        val pm = context.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+            .takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }
+
     private fun findInstalledRetroArch(): String? =
         retroArchPackages.firstOrNull { isPackageInstalled(it) }
 
@@ -1090,7 +1359,7 @@ class LibraryRepositoryImpl(
             val found = standalones.firstOrNull { isPackageInstalled(it.first) }
             if (found != null) {
                 return EmulatorConfig(
-                    type = found.second,
+                    type = installedLabel(found.first) ?: found.second,
                     packageName = found.first,
                     core = null
                 )
@@ -1100,7 +1369,7 @@ class LibraryRepositoryImpl(
         val raPackage = findInstalledRetroArch()
         if (raPackage != null) {
             return EmulatorConfig(
-                type = "RetroArch",
+                type = installedLabel(raPackage) ?: "RetroArch",
                 packageName = raPackage,
                 core = def.core
             )
@@ -1113,7 +1382,8 @@ class LibraryRepositoryImpl(
                 core = def.core
             )
             else -> EmulatorConfig(
-                type = standalones?.firstOrNull()?.second ?: "RetroArch",
+                type = standalones?.firstOrNull()?.let { installedLabel(it.first) ?: it.second }
+                    ?: "RetroArch",
                 packageName = standalones?.firstOrNull()?.first ?: retroArchPackages.first(),
                 core = null
             )

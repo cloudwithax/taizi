@@ -159,7 +159,9 @@ object RetroArchCores {
         "gmaster" to listOf("mame"),
         "multivision" to listOf("mame"),
         "j2me" to listOf("freej2me"),
-        "openbor" to listOf("openbor")
+        "openbor" to listOf("openbor"),
+        "doom" to listOf("prboom"),
+        "quake" to listOf("tyrquake")
     )
 
     fun forSystem(systemId: String): List<String> = bySystem[systemId].orEmpty()

@@ -165,6 +165,7 @@ class MainViewModel @Inject constructor(
                     startFileObserver(library.romRoot)
                 },
                 onFailure = { error ->
+                    android.util.Log.e("Taizi", "Scan failed: ${error.message}", error)
                     if (!hadLibrary || isNewRoot) _uiState.value = MainUiState.Error(error.message ?: "Scan failed")
                 }
             )
