@@ -13,8 +13,8 @@ android {
         applicationId = "com.taizi"
         minSdk = 26
         targetSdk = 35
-        versionCode = 48
-        versionName = "1.10.15"
+        versionCode = 49
+        versionName = "1.11.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
