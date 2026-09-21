@@ -95,6 +95,22 @@ class MainViewModel @Inject constructor(
     private val _playersForSystem = MutableStateFlow<List<EmulatorConfig>>(emptyList())
     val playersForSystem: StateFlow<List<EmulatorConfig>> = _playersForSystem.asStateFlow()
 
+    /** Every platform whose player is missing, for the inline warnings. */
+    private val _playerIssues = MutableStateFlow<List<PlayerIssue>>(emptyList())
+    val playerIssues: StateFlow<List<PlayerIssue>> = _playerIssues.asStateFlow()
+
+    /** The subset worth interrupting the user about, minus anything dismissed. */
+    private val _playerPrompt = MutableStateFlow<List<PlayerIssue>>(emptyList())
+    val playerPrompt: StateFlow<List<PlayerIssue>> = _playerPrompt.asStateFlow()
+
+    /** A launch failure that isn't about a missing player. */
+    private val _playerAlert = MutableStateFlow<String?>(null)
+    val playerAlert: StateFlow<String?> = _playerAlert.asStateFlow()
+
+    // "Not now" only silences the platforms the user saw. A different platform
+    // breaking later, or the same one breaking a different way, prompts again.
+    private val dismissedIssues = mutableSetOf<String>()
+
     private val _updateDownloadState = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
     val updateDownloadState: StateFlow<UpdateDownloadState> = _updateDownloadState.asStateFlow()
 
@@ -116,6 +132,7 @@ class MainViewModel @Inject constructor(
             if (cached.romRoot.isNotEmpty()) {
                 _uiState.value = MainUiState.LibraryLoaded(cached)
                 startFileObserver(cached.romRoot)
+                refreshPlayerIssues()
             } else {
                 _uiState.value = MainUiState.Initial
             }
@@ -186,7 +203,17 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             val result = repository.launchGame(game)
             if (result.isFailure) {
-                android.util.Log.e("Taizi", "Launch failed: ${result.exceptionOrNull()?.message}")
+                // A dead player is the overwhelmingly likely cause, and it's
+                // fixable, so offer the fallback right here instead of letting
+                // the tap do nothing. Anything else gets stated plainly.
+                val issue = repository.auditPlayers().find { it.systemId == game.systemId }
+                if (issue != null) {
+                    dismissedIssues -= issue.key
+                    refreshPlayerIssues()
+                } else {
+                    _playerAlert.value = result.exceptionOrNull()?.message
+                        ?: "Couldn't launch this game"
+                }
                 return@launch
             }
             if (game.systemId in _nowPlayingSystems.value) {
@@ -213,6 +240,43 @@ class MainViewModel @Inject constructor(
         _nowPlaying.value = null
     }
 
+    /**
+     * Re-checks every platform's player. Called on resume because emulators are
+     * uninstalled outside the app, and Taizi is the home screen it returns to.
+     */
+    fun auditPlayers() {
+        viewModelScope.launch { refreshPlayerIssues() }
+    }
+
+    private suspend fun refreshPlayerIssues() {
+        val issues = repository.auditPlayers()
+        _playerIssues.value = issues
+        // Drop stale dismissals so a platform that's fixed and breaks again
+        // can still prompt.
+        dismissedIssues.retainAll(issues.map { it.key }.toSet())
+        _playerPrompt.value = issues.filter { it.key !in dismissedIssues }
+    }
+
+    /** Switches every prompted platform that has one to its best available player. */
+    fun repairPlayers() {
+        val issues = _playerPrompt.value
+        if (issues.isEmpty()) return
+        viewModelScope.launch {
+            repository.repairPlayers(issues.filter { it.replacement != null }.map { it.systemId })
+            _playerPrompt.value = emptyList()
+            refreshPlayerIssues()
+        }
+    }
+
+    fun dismissPlayerPrompt() {
+        dismissedIssues += _playerPrompt.value.map { it.key }
+        _playerPrompt.value = emptyList()
+    }
+
+    fun dismissPlayerAlert() {
+        _playerAlert.value = null
+    }
+
     fun refreshPlayersFor(systemId: String) {
         _playersForSystem.value = emptyList()
         viewModelScope.launch {
@@ -223,12 +287,14 @@ class MainViewModel @Inject constructor(
     fun setSystemPlayer(systemId: String, config: EmulatorConfig) {
         viewModelScope.launch {
             repository.setEmulatorConfig(systemId, config)
+            refreshPlayerIssues()
         }
     }
 
     fun resetSystemPlayer(systemId: String) {
         viewModelScope.launch {
             repository.resetEmulatorConfig(systemId)
+            refreshPlayerIssues()
         }
     }
 
@@ -374,6 +440,9 @@ class MainViewModel @Inject constructor(
         repository.stopFileObserver()
     }
 }
+
+/** Identity of an issue for dismissal: the platform plus what broke. */
+private val PlayerIssue.key: String get() = "$systemId:${missingPackage.orEmpty()}"
 
 sealed class Screen {
     object SystemList : Screen()

@@ -105,3 +105,16 @@ data class EmulatorConfig(
     val core: String? = null,
     val isInstalled: Boolean = false
 )
+
+/**
+ * A platform that can't launch anything right now: its player was uninstalled,
+ * or no supported emulator was ever found. [replacement] is the best installed
+ * alternative, or null when there's nothing left to fall back to.
+ */
+data class PlayerIssue(
+    val systemId: String,
+    val systemName: String,
+    val missingPackage: String?,
+    val missingLabel: String,
+    val replacement: EmulatorConfig?
+)

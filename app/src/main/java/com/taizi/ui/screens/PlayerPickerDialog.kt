@@ -6,12 +6,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -66,12 +69,30 @@ fun PlayerPickerDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 if (players.isEmpty()) {
-                    Text(
-                        text = "No supported players found. Install a compatible " +
-                                "emulator and rescan.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "No player installed for ${system.name}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                text = "Games on this platform can't launch. Install " +
+                                        "RetroArch or a standalone emulator that " +
+                                        "supports it, then reopen this list.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 } else {
                     players.forEach { player ->
                         PlayerRow(
@@ -94,7 +115,7 @@ fun PlayerPickerDialog(
     )
 }
 
-private val EmulatorConfig.displayLabel: String
+internal val EmulatorConfig.displayLabel: String
     get() = if (core.isNullOrBlank()) type else "$type - $core"
 
 @Composable

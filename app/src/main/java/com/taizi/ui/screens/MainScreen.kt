@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FolderOpen
 
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -31,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -66,6 +68,8 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
     val scanProgress by viewModel.scanProgress.collectAsState()
     val nowPlaying by viewModel.nowPlaying.collectAsState()
     val scrapeStatus by viewModel.scrapeStatus.collectAsState()
+    val playerPrompt by viewModel.playerPrompt.collectAsState()
+    val playerAlert by viewModel.playerAlert.collectAsState()
 
     // Gesture-nav Back is swallowed while the guard is up; the hardware key is
     // consumed in MainActivity so it can be held instead.
@@ -154,8 +158,49 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
                     onExit = viewModel::dismissNowPlaying
                 )
             }
+
+            // Hosted at the top level so a missing player surfaces wherever the
+            // user happens to be, including straight off a failed launch.
+            PlayerFallbackDialog(
+                issues = playerPrompt,
+                onUseFallbacks = viewModel::repairPlayers,
+                onDismiss = viewModel::dismissPlayerPrompt
+            )
+
+            playerAlert?.let { message ->
+                LaunchFailureDialog(
+                    message = message,
+                    onDismiss = viewModel::dismissPlayerAlert
+                )
+            }
         }
     }
+}
+
+/** Launch failures that aren't a missing player — otherwise the tap does nothing. */
+@Composable
+private fun LaunchFailureDialog(message: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Filled.ErrorOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error
+            )
+        },
+        title = { Text("Couldn't launch") },
+        text = {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("OK") }
+        }
+    )
 }
 
 @Composable

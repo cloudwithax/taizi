@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.AlertDialog
@@ -88,6 +89,7 @@ import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.taizi.domain.model.Game
+import com.taizi.domain.model.PlayerIssue
 import com.taizi.domain.model.System
 import com.taizi.ui.components.focusHighlight
 import com.taizi.ui.theme.accentFor
@@ -118,6 +120,12 @@ fun GameListScreen(
     var randomPick by remember { mutableStateOf<Game?>(null) }
     var playerPickerOpen by remember { mutableStateOf(false) }
     val players by viewModel.playersForSystem.collectAsState()
+
+    // Re-check on entry so the warning is accurate even if an emulator was
+    // removed while Taizi stayed in the foreground.
+    LaunchedEffect(systemId) { viewModel.auditPlayers() }
+    val playerIssues by viewModel.playerIssues.collectAsState()
+    val playerIssue = playerIssues.find { it.systemId == systemId }
 
     if (playerPickerOpen && system != null) {
         PlayerPickerDialog(
@@ -210,6 +218,16 @@ fun GameListScreen(
                 }
             }
         )
+
+        playerIssue?.let { issue ->
+            PlayerWarningBar(
+                issue = issue,
+                onChoosePlayer = {
+                    viewModel.refreshPlayersFor(systemId)
+                    playerPickerOpen = true
+                }
+            )
+        }
 
         randomPick?.let { picked ->
             RandomGameDialog(
@@ -689,6 +707,64 @@ internal fun PlaceholderArt(title: String, accent: Color) {
             fontWeight = FontWeight.ExtraBold,
             color = Color.White.copy(alpha = 0.9f)
         )
+    }
+}
+
+/**
+ * Sits under the banner when this platform's player is gone or was never found.
+ * Without it the only symptom is a game tap that silently does nothing.
+ */
+@Composable
+private fun PlayerWarningBar(
+    issue: PlayerIssue,
+    onChoosePlayer: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.errorContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (issue.missingPackage != null) {
+                        "${issue.missingLabel} isn't installed any more"
+                    } else {
+                        "No player set for this platform"
+                    },
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Text(
+                    text = issue.replacement?.let { "Games won't launch. ${it.displayLabel} is available." }
+                        ?: "Games won't launch until a supported emulator is installed.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            TextButton(onClick = onChoosePlayer) {
+                Text(
+                    text = "Choose",
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontSize = 13.sp
+                )
+            }
+        }
     }
 }
 

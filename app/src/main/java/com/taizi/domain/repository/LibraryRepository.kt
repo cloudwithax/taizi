@@ -21,6 +21,8 @@ interface LibraryRepository {
     suspend fun setEmulatorConfig(systemId: String, config: EmulatorConfig)
     suspend fun resetEmulatorConfig(systemId: String): EmulatorConfig?
     suspend fun getPlayersForSystem(systemId: String): List<EmulatorConfig>
+    suspend fun auditPlayers(): List<PlayerIssue>
+    suspend fun repairPlayers(systemIds: List<String>): Int
     suspend fun getCustomMappings(): Map<String, String>
     suspend fun saveCustomMappings(mappings: Map<String, String>)
     suspend fun getBiosStatus(systemId: String): BiosStatus

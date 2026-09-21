@@ -742,6 +742,58 @@ class LibraryRepositoryImpl(
         }
 
     /**
+     * Every system whose configured player can no longer launch a game, paired
+     * with the best installed replacement. Cheap enough to run on every resume:
+     * it's a package-manager lookup per system, no disk scan.
+     */
+    override suspend fun auditPlayers(): List<PlayerIssue> = withContext(Dispatchers.IO) {
+        _library.value.systems.mapNotNull { system ->
+            val pkg = system.emulatorPackage
+            if (pkg != null && isPackageInstalled(pkg)) return@mapNotNull null
+            PlayerIssue(
+                systemId = system.id,
+                systemName = system.name,
+                missingPackage = pkg,
+                // The label was resolved while the app was still installed, so
+                // the stored type is the only name we can still show for it.
+                missingLabel = system.emulatorType.ifBlank { pkg.orEmpty() },
+                replacement = getPlayersForSystem(system.id).firstOrNull()
+            )
+        }
+    }
+
+    /**
+     * Points each system at its best installed player. Systems with nothing
+     * available are skipped. Returns how many were actually repaired.
+     */
+    override suspend fun repairPlayers(systemIds: List<String>): Int {
+        val overrides = localDataSource.getEmulatorOverrides().toMutableMap()
+        val repaired = mutableMapOf<String, EmulatorConfig>()
+        for (systemId in systemIds) {
+            val best = getPlayersForSystem(systemId).firstOrNull() ?: continue
+            overrides[systemId] = best
+            repaired[systemId] = best
+        }
+        if (repaired.isEmpty()) return 0
+
+        localDataSource.saveEmulatorOverrides(overrides)
+        // One library write for the whole batch rather than one per system.
+        val current = _library.value
+        val updated = current.systems.map { system ->
+            val config = repaired[system.id] ?: return@map system
+            system.copy(
+                emulatorType = config.type,
+                emulatorPackage = config.packageName,
+                core = config.core
+            )
+        }
+        val newLibrary = current.copy(systems = updated)
+        _library.value = newLibrary
+        localDataSource.saveLibraryCache(newLibrary)
+        return repaired.size
+    }
+
+    /**
      * Core ids present in a RetroArch frontend's cores directory. Returns null
      * when the directory can't be read (scoped storage), in which case callers
      * fall back to the static core table.
@@ -1388,16 +1440,14 @@ class LibraryRepositoryImpl(
             )
         }
 
+        // Nothing suitable is installed. Naming a package anyway would make the
+        // system look configured and then fail at launch with nothing to show
+        // for it, so leave the package null and let the player audit flag it.
         return when (def.emulator) {
-            "retroarch" -> EmulatorConfig(
-                type = "RetroArch",
-                packageName = retroArchPackages.first(),
-                core = def.core
-            )
+            "retroarch" -> EmulatorConfig(type = "RetroArch", packageName = null, core = def.core)
             else -> EmulatorConfig(
-                type = standalones?.firstOrNull()?.let { installedLabel(it.first) ?: it.second }
-                    ?: "RetroArch",
-                packageName = standalones?.firstOrNull()?.first ?: retroArchPackages.first(),
+                type = standalones?.firstOrNull()?.second ?: "RetroArch",
+                packageName = null,
                 core = null
             )
         }

@@ -86,6 +86,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         storagePermissionGranted.value = hasStoragePermission()
+        // Emulators get uninstalled outside Taizi, and as the home screen this
+        // is where the user lands afterwards. Re-check who can still launch.
+        viewModel.auditPlayers()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

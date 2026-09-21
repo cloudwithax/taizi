@@ -46,6 +46,7 @@ fun SettingsScreen(
     val updateDownloadState by viewModel.updateDownloadState.collectAsState()
     val updateCheckResult by viewModel.updateCheckResult.collectAsState()
     val players by viewModel.playersForSystem.collectAsState()
+    val playerIssues by viewModel.playerIssues.collectAsState()
 
     playerSystem?.let { sys ->
         PlayerPickerDialog(
@@ -274,6 +275,7 @@ fun SettingsScreen(
                         )
                     } else {
                         systems.forEach { sys ->
+                            val issue = playerIssues.find { it.systemId == sys.id }
                             SettingsItem(
                                 title = sys.name,
                                 subtitle = buildString {
@@ -281,6 +283,15 @@ fun SettingsScreen(
                                     sys.emulatorPackage?.let {
                                         append(" · ")
                                         append(it)
+                                    }
+                                    // A package that's no longer there looks
+                                    // identical to a working one otherwise.
+                                    if (issue != null) {
+                                        append(" · ")
+                                        append(
+                                            if (issue.missingPackage != null) "NOT INSTALLED"
+                                            else "none found"
+                                        )
                                     }
                                 },
                                 icon = MaterialIcons.Filled.SportsEsports,
