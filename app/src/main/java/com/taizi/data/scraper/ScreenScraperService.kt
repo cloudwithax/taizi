@@ -48,14 +48,22 @@ class ScreenScraperService(private val context: Context) {
             "n64" to 14,
             "gamecube" to 13,
             "wii" to 16,
+            "wiiu" to 18,
             "nds" to 15,
             "3ds" to 17,
+            "switch" to 225,
             "virtualboy" to 11,
             "pokemini" to 211,
+            "gameandwatch" to 52,
             // Sony
             "psx" to 57,
             "ps2" to 58,
             "psp" to 61,
+            "ps3" to 59,
+            "psvita" to 62,
+            // Microsoft
+            "xbox" to 32,
+            "xbox360" to 33,
             // Sega
             "genesis" to 1,
             "sms" to 2,
@@ -103,6 +111,7 @@ class ScreenScraperService(private val context: Context) {
             "amstradcpc" to 65,
             "zxspectrum" to 76,
             "zx81" to 77,
+            "amstradgx4000" to 87,
             // MSX
             "msx" to 113,
             "msx2" to 116,
@@ -121,6 +130,11 @@ class ScreenScraperService(private val context: Context) {
             "fmtowns" to 253,
             // DOS / PC
             "dos" to 135,
+            // Source ports and PC ports resolve against ScreenScraper's DOS
+            // and Windows catalogues, which is where Doom/Quake/itch titles live.
+            "doom" to 135,
+            "quake" to 135,
+            "ports" to 138,
             // Misc
             "colecovision" to 48,
             "intellivision" to 115,
@@ -129,6 +143,7 @@ class ScreenScraperService(private val context: Context) {
             "odyssey2" to 104,
             "channelf" to 80,
             "cdi" to 133,
+            "pv1000" to 74,
             "mac" to 146,
             "ti99" to 205,
             "thomson" to 141,
@@ -240,6 +255,13 @@ class ScreenScraperService(private val context: Context) {
             ?.firstOrNull { it.asJsonObject.get("region")?.asString == "ss" }
             ?.asJsonObject?.get("text")?.asString
             ?: jeu.getAsJsonArray("noms")?.firstOrNull()?.asJsonObject?.get("text")?.asString
+
+        // ScreenScraper files everything it doesn't consider a game — readmes,
+        // shareware stubs, loose assets — under a single "ZZZ(notgame)" record.
+        // Matching that is a miss, not a hit: leave the file's own name alone.
+        if (title != null && title.startsWith("ZZZ(notgame)", ignoreCase = true)) {
+            return@withContext null
+        }
 
         val description = jeu.getAsJsonArray("synopsis")
             ?.firstOrNull { it.asJsonObject.get("langue")?.asString == "en" }

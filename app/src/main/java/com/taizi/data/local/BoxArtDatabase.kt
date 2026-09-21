@@ -40,6 +40,10 @@ interface BoxArtDao {
     @Query("DELETE FROM box_art WHERE romPath = :romPath")
     suspend fun delete(romPath: String)
 
+    /** Drops rows left behind by ScreenScraper's catch-all non-game record. */
+    @Query("DELETE FROM box_art WHERE gameName LIKE 'ZZZ(notgame)%'")
+    suspend fun deleteNonGameMatches()
+
     @Query("SELECT COUNT(*) FROM box_art")
     suspend fun count(): Int
 }

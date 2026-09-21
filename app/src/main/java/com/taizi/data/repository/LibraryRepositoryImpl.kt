@@ -168,26 +168,34 @@ class LibraryRepositoryImpl(
                 // Final emit so the UI lands on "N / N ROMs"
                 onProgress?.invoke("", "", scannedCount, scannedCount)
 
-                // Restore box art paths from database
+                boxArtDao.deleteNonGameMatches()
+
+                // Restore scraped names, art paths and metadata from the database.
+                // The scraped title matters as much as the art: arcade sets are
+                // named things like "mslug3.zip" on disk, so dropping the title
+                // here would leave the grid showing filenames after every rescan.
                 val allArt = boxArtDao.getAll().associateBy { it.romPath }
                 for ((systemId, games) in gamesBySystem) {
                     gamesBySystem[systemId] = games.map { game ->
-                        val entry = allArt[game.path]
-                        if (entry != null && File(entry.artPath).exists()) {
-                            game.copy(
-                                boxArtPath = entry.artPath,
-                                metadata = GameMetadata(
-                                    description = entry.description,
-                                    genre = entry.genre,
-                                    developer = entry.developer,
-                                    publisher = entry.publisher,
-                                    releaseDate = entry.releaseDate,
-                                    players = entry.players,
-                                    rating = entry.rating
-                                )
+                        val entry = allArt[game.path] ?: return@map game
+                        game.copy(
+                            name = entry.gameName.ifBlank { game.name },
+                            boxArtPath = entry.artPath.takeIf {
+                                it.isNotBlank() && File(it).exists()
+                            },
+                            metadata = GameMetadata(
+                                description = entry.description,
+                                genre = entry.genre,
+                                developer = entry.developer,
+                                publisher = entry.publisher,
+                                releaseDate = entry.releaseDate,
+                                players = entry.players,
+                                rating = entry.rating
                             )
-                        } else game
+                        )
                     }
+                        // The earlier sort ran before the scraped names landed.
+                        .sortedBy { it.name.lowercase() }
                 }
 
                 // Only surface systems that actually have ROMs on disk, and make
@@ -416,22 +424,27 @@ class LibraryRepositoryImpl(
     }
 
     private fun cleanGameName(filename: String): String {
-        var name = filename
-            .replace(Regex("\\[[A-Za-z]+\\]"), "")
+        // ROMs fetched through a browser often keep their percent-escapes on disk
+        // ("Mario%20Kart%208%20Deluxe"), so decode before anything else. Uri.decode
+        // is used over URLDecoder because the latter also turns "+" into a space.
+        val decoded = if (filename.contains('%')) {
+            runCatching { Uri.decode(filename) }.getOrDefault(filename)
+        } else {
+            filename
+        }
+        return decoded
+            // Square brackets only ever hold tags in ROM naming conventions:
+            // dump flags, title IDs, release-group names. Parentheses are left
+            // alone because that's where region and revision info lives.
+            .replace(Regex("\\[[^\\[\\]]*]"), "")
             .replace(Regex("\\(v[0-9.]+\\),?\\s*"), "")
             .replace(Regex("\\(Rev\\s*[0-9]+\\)"), "")
             .replace(Regex("\\(Disc\\s*[0-9]+\\)"), "")
             .replace(Regex("\\(Disk\\s*[0-9]+\\)"), "")
             .replace(Regex("\\([A-Za-z]{2}\\)"), "")
-            .replace(Regex("\\[[0-9]+\\)"), "")
-            .replace(Regex("\\[!]\\)"), "")
-            .replace(Regex("\\[a]\\)"), "")
-            .replace(Regex("\\[t]\\)"), "")
-            .replace(Regex("\\[T]\\)"), "")
             .replace(Regex("^[\\s._-]+|[\\s._-]+$"), "")
             .replace(Regex("\\s{2,}"), " ")
             .trim()
-        return name
     }
 
     private fun scanBiosFolder(biosFolder: File, systems: List<System>): Map<String, BiosStatus> {
@@ -1422,8 +1435,6 @@ class LibraryRepositoryImpl(
                     if (game.boxArtPath != null) continue
 
                     val info = scraperService.scrapeGame(File(game.path), systemId) ?: continue
-                    if (info.boxArtUrl == null) continue
-
                     results.add(ScrapeResult(game, info))
                     delay(250)
                 }
@@ -1433,9 +1444,14 @@ class LibraryRepositoryImpl(
                         async {
                             downloadSemaphore.acquire()
                             try {
-                                val localPath = scraperService.downloadBoxArt(
-                                    info.boxArtUrl!!, systemId, game.name
-                                ) ?: return@async
+                                // A title and metadata are worth keeping even
+                                // when a game has no box-2D art: arcade sets are
+                                // frequently art-less but well named, and without
+                                // this they keep their cryptic filenames.
+                                val localPath = info.boxArtUrl?.let {
+                                    scraperService.downloadBoxArt(it, systemId, game.name)
+                                }
+                                if (localPath == null && info.title == null) return@async
 
                                 val updatedGame = game.copy(
                                     name = info.title ?: game.name,
@@ -1455,7 +1471,7 @@ class LibraryRepositoryImpl(
                                     romPath = game.path,
                                     systemId = systemId,
                                     gameName = updatedGame.name,
-                                    artPath = localPath,
+                                    artPath = localPath.orEmpty(),
                                     description = info.description,
                                     genre = info.genre,
                                     developer = info.developer,
@@ -1513,8 +1529,6 @@ class LibraryRepositoryImpl(
                     if (game.boxArtPath != null) continue
 
                     val info = scraperService.scrapeGame(File(game.path), systemId) ?: continue
-                    if (info.boxArtUrl == null) continue
-
                     results.add(ScrapeResult(systemId, game, info))
                     delay(250)
                 }
@@ -1525,9 +1539,14 @@ class LibraryRepositoryImpl(
                         async {
                             downloadSemaphore.acquire()
                             try {
-                                val localPath = scraperService.downloadBoxArt(
-                                    info.boxArtUrl!!, systemId, game.name
-                                ) ?: return@async
+                                // A title and metadata are worth keeping even
+                                // when a game has no box-2D art: arcade sets are
+                                // frequently art-less but well named, and without
+                                // this they keep their cryptic filenames.
+                                val localPath = info.boxArtUrl?.let {
+                                    scraperService.downloadBoxArt(it, systemId, game.name)
+                                }
+                                if (localPath == null && info.title == null) return@async
 
                                 val updatedGame = game.copy(
                                     name = info.title ?: game.name,
@@ -1547,7 +1566,7 @@ class LibraryRepositoryImpl(
                                     romPath = game.path,
                                     systemId = systemId,
                                     gameName = updatedGame.name,
-                                    artPath = localPath,
+                                    artPath = localPath.orEmpty(),
                                     description = info.description,
                                     genre = info.genre,
                                     developer = info.developer,
