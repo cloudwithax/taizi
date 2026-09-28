@@ -35,6 +35,8 @@ class LocalDataSource(private val context: Context) {
         val EMULATOR_OVERRIDES = stringPreferencesKey("emulator_overrides")
         val LIBRARY_CACHE = stringPreferencesKey("library_cache_json")
         val NOW_PLAYING_SYSTEMS = stringSetPreferencesKey("now_playing_systems")
+        val SYSTEMS_LAYOUT = stringPreferencesKey("systems_layout")
+        val GAMES_LAYOUT = stringPreferencesKey("games_layout")
     }
 
     // Settings
@@ -65,6 +67,16 @@ class LocalDataSource(private val context: Context) {
 
     suspend fun setNowPlayingSystems(systemIds: Set<String>) {
         context.dataStore.edit { it[NOW_PLAYING_SYSTEMS] = systemIds }
+    }
+
+    // Layout picked for the systems and games screens
+    suspend fun getLayout(key: Preferences.Key<String>, default: LibraryLayout): LibraryLayout {
+        val prefs = context.dataStore.data.first()
+        return prefs[key]?.let { name -> LibraryLayout.entries.find { it.name == name } } ?: default
+    }
+
+    suspend fun setLayout(key: Preferences.Key<String>, layout: LibraryLayout) {
+        context.dataStore.edit { it[key] = layout.name }
     }
 
     // Library Cache as JSON

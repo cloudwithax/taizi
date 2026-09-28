@@ -9,6 +9,13 @@ enum class BiosStatus {
     PRESENT
 }
 
+/** How the systems and games screens lay out their items. */
+enum class LibraryLayout {
+    CAROUSEL,
+    GRID,
+    LIST
+}
+
 enum class LibraryChange {
     ADDED,
     REMOVED,

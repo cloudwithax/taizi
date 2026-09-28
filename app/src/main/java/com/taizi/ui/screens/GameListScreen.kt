@@ -83,15 +83,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.taizi.domain.model.Game
+import com.taizi.domain.model.LibraryLayout
 import com.taizi.domain.model.PlayerIssue
 import com.taizi.domain.model.System
 import com.taizi.ui.components.focusHighlight
+import com.taizi.ui.components.layoutIcon
 import com.taizi.ui.theme.accentFor
 import kotlin.math.abs
 import kotlinx.coroutines.launch
@@ -119,6 +122,7 @@ fun GameListScreen(
     var showFavoritesOnly by remember { mutableStateOf(false) }
     var randomPick by remember { mutableStateOf<Game?>(null) }
     var playerPickerOpen by remember { mutableStateOf(false) }
+    val layout by viewModel.gamesLayout.collectAsState()
     val players by viewModel.playersForSystem.collectAsState()
 
     // Re-check on entry so the warning is accurate even if an emulator was
@@ -199,6 +203,12 @@ fun GameListScreen(
             accentSecondary = accent.secondary,
             showFavoritesOnly = showFavoritesOnly,
             searchOpen = searchOpen,
+            layout = layout,
+            onLayoutClick = {
+                viewModel.setGamesLayout(
+                    if (layout == LibraryLayout.LIST) LibraryLayout.GRID else LibraryLayout.LIST
+                )
+            },
             showNowPlayingToggle = supportsNowPlaying,
             nowPlayingEnabled = nowPlayingEnabled,
             showPlayerButton = supportsNowPlaying,
@@ -258,9 +268,11 @@ fun GameListScreen(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             // Size the grid to the space left under the banner: always a clean
             // 5 x 2 page (10 games), so a second row is never half cut off.
-            val columnCount = 5
+            // The list is the same grid with one column of rows.
+            val isList = layout == LibraryLayout.LIST
+            val columnCount = if (isList) 1 else 5
             val rowCount = 2
-            val gap = 14.dp
+            val gap = if (isList) 8.dp else 14.dp
             val edge = 16.dp
             val cardHeight = (
                 (maxHeight - edge * 2 - gap * (rowCount - 1)) / rowCount
@@ -321,7 +333,13 @@ fun GameListScreen(
                 contentPadding = PaddingValues(horizontal = edge, vertical = edge)
             ) {
                 itemsIndexed(filteredGames, key = { _, game -> game.path }) { index, game ->
-                    GameCard(
+                    if (isList) GameRow(
+                        game = game,
+                        accent = accent.primary,
+                        isFocused = index == focusedIndex,
+                        onClick = { onGameClick(game) },
+                        onFavoriteClick = { viewModel.toggleFavorite(game.path, !game.favorite) }
+                    ) else GameCard(
                         game = game,
                         accent = accent.primary,
                         isFocused = index == focusedIndex,
@@ -345,6 +363,8 @@ private fun SystemBanner(
     accentSecondary: Color,
     showFavoritesOnly: Boolean,
     searchOpen: Boolean,
+    layout: LibraryLayout,
+    onLayoutClick: () -> Unit,
     showNowPlayingToggle: Boolean,
     nowPlayingEnabled: Boolean,
     showPlayerButton: Boolean,
@@ -436,6 +456,14 @@ private fun SystemBanner(
                 Icon(
                     imageVector = Icons.Filled.Shuffle,
                     contentDescription = "Random",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            RoundIconButton(onClick = onLayoutClick) {
+                Icon(
+                    imageVector = layoutIcon(layout),
+                    contentDescription = "Change layout",
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -672,6 +700,82 @@ internal fun GameCard(
 }
 
 @Composable
+private fun GameRow(
+    game: Game,
+    accent: Color,
+    onClick: () -> Unit,
+    onFavoriteClick: (Boolean) -> Unit,
+    isFocused: Boolean = false
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .clip(shape)
+            .background(
+                if (isFocused) accent.copy(alpha = 0.22f)
+                else MaterialTheme.colorScheme.surface
+            )
+            .then(if (isFocused) Modifier.border(2.dp, accent, shape) else Modifier)
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .aspectRatio(0.72f)
+                .clip(RoundedCornerShape(6.dp))
+        ) {
+            PlaceholderArt(title = game.displayName, accent = accent, letterSize = 20.sp)
+            if (game.boxArtPath != null) {
+                AsyncImage(
+                    model = game.boxArtPath,
+                    contentDescription = game.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    filterQuality = FilterQuality.Low
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = game.displayName,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (game.playCount > 0) {
+                Text(
+                    text = "Played ${game.playCount}×",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (game.isMultiDisc) {
+            Chip(text = "${game.discs.size} DISCS", background = accent)
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        IconButton(
+            onClick = { onFavoriteClick(!game.favorite) },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                imageVector = if (game.favorite) Icons.Filled.Favorite
+                else Icons.Outlined.FavoriteBorder,
+                contentDescription = "Favorite",
+                tint = if (game.favorite) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun Chip(text: String, background: Color) {
     Surface(
         shape = RoundedCornerShape(6.dp),
@@ -690,7 +794,7 @@ private fun Chip(text: String, background: Color) {
 }
 
 @Composable
-internal fun PlaceholderArt(title: String, accent: Color) {
+internal fun PlaceholderArt(title: String, accent: Color, letterSize: TextUnit = 56.sp) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -703,7 +807,7 @@ internal fun PlaceholderArt(title: String, accent: Color) {
     ) {
         Text(
             text = title.take(1).uppercase(),
-            fontSize = 56.sp,
+            fontSize = letterSize,
             fontWeight = FontWeight.ExtraBold,
             color = Color.White.copy(alpha = 0.9f)
         )

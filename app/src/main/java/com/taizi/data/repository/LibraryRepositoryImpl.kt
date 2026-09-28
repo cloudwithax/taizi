@@ -872,6 +872,22 @@ class LibraryRepositoryImpl(
         }
     }
 
+    override suspend fun getSystemsLayout(): LibraryLayout = withContext(Dispatchers.IO) {
+        localDataSource.getLayout(LocalDataSource.SYSTEMS_LAYOUT, LibraryLayout.CAROUSEL)
+    }
+
+    override suspend fun setSystemsLayout(layout: LibraryLayout) = withContext(Dispatchers.IO) {
+        localDataSource.setLayout(LocalDataSource.SYSTEMS_LAYOUT, layout)
+    }
+
+    override suspend fun getGamesLayout(): LibraryLayout = withContext(Dispatchers.IO) {
+        localDataSource.getLayout(LocalDataSource.GAMES_LAYOUT, LibraryLayout.GRID)
+    }
+
+    override suspend fun setGamesLayout(layout: LibraryLayout) = withContext(Dispatchers.IO) {
+        localDataSource.setLayout(LocalDataSource.GAMES_LAYOUT, layout)
+    }
+
     override suspend fun findSystemForFolder(folderName: String): System? {
         return _library.value.systems.firstOrNull { system ->
             system.path.endsWith(folderName, true) ||

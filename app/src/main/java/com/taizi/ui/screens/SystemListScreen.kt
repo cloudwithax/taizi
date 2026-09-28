@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -14,6 +15,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -25,6 +29,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -44,6 +52,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -77,11 +86,14 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.taizi.domain.model.LibraryLayout
 import com.taizi.domain.model.System
+import com.taizi.ui.components.layoutIcon
 import com.taizi.ui.components.FullMotionScale
 import com.taizi.ui.components.focusHighlight
 import com.taizi.ui.theme.SystemAccent
@@ -121,13 +133,84 @@ fun SystemListScreen(
         return
     }
 
+    val layout by viewModel.systemsLayout.collectAsState()
+    var focusedIndex by remember {
+        mutableIntStateOf(viewModel.getSystemPagerPage().coerceIn(0, systems.lastIndex))
+    }
+    // A rescan can shrink the list under a remembered selection.
+    val selected = focusedIndex.coerceIn(0, systems.lastIndex)
+    val focused = systems[selected]
+    // Every layout shares one selection, so switching keeps the same system.
+    val onFocusChange: (Int) -> Unit = {
+        focusedIndex = it
+        viewModel.setSystemPagerPage(it)
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        AccentGlow(accent = accentFor(focused.id))
+
+        // Size the carousel against the viewport rather than a fixed height, so
+        // short screens (a 1080p handheld at native density) keep the metadata
+        // row below it on-screen instead of clipping it off the bottom.
+        val carouselHeight = (maxHeight - 190.dp).coerceIn(140.dp, 300.dp)
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            LibraryHeader(
+                totalSystems = systems.size,
+                totalGames = systems.sumOf { it.romCount },
+                layout = layout,
+                onLayoutClick = { viewModel.setSystemsLayout(nextSystemsLayout(layout)) },
+                onScanClick = onScanClick,
+                onSearchClick = onSearchClick,
+                onAppsClick = onAppsClick,
+                onSettingsClick = onSettingsClick
+            )
+
+            when (layout) {
+                LibraryLayout.CAROUSEL -> SystemCarousel(
+                    systems = systems,
+                    initialPage = selected,
+                    carouselHeight = carouselHeight,
+                    onFocusChange = onFocusChange,
+                    onSystemClick = onSystemClick
+                )
+                LibraryLayout.GRID, LibraryLayout.LIST -> SystemGrid(
+                    systems = systems,
+                    selectedIndex = selected,
+                    columnCount = if (layout == LibraryLayout.GRID) 4 else 1,
+                    onFocusChange = onFocusChange,
+                    onSystemClick = onSystemClick
+                )
+            }
+        }
+    }
+}
+
+private fun nextSystemsLayout(current: LibraryLayout): LibraryLayout = when (current) {
+    LibraryLayout.CAROUSEL -> LibraryLayout.GRID
+    LibraryLayout.GRID -> LibraryLayout.LIST
+    LibraryLayout.LIST -> LibraryLayout.CAROUSEL
+}
+
+@Composable
+private fun ColumnScope.SystemCarousel(
+    systems: List<System>,
+    initialPage: Int,
+    carouselHeight: Dp,
+    onFocusChange: (Int) -> Unit,
+    onSystemClick: (System) -> Unit
+) {
     val pagerState = rememberPagerState(
-        initialPage = viewModel.getSystemPagerPage().coerceIn(0, systems.size - 1),
+        initialPage = initialPage,
         pageCount = { systems.size }
     )
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }
-            .collect { viewModel.setSystemPagerPage(it) }
+            .collect { onFocusChange(it) }
     }
     val focused = systems.getOrNull(pagerState.currentPage) ?: systems.first()
     val focusedAccent = accentFor(focused.id)
@@ -162,81 +245,161 @@ fun SystemListScreen(
         return true
     }
 
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        AccentGlow(accent = focusedAccent)
+    Spacer(modifier = Modifier.weight(1f))
 
-        // Size the carousel against the viewport rather than a fixed height, so
-        // short screens (a 1080p handheld at native density) keep the metadata
-        // row below it on-screen instead of clipping it off the bottom.
-        val carouselHeight = (maxHeight - 190.dp).coerceIn(140.dp, 300.dp)
+    HorizontalPager(
+        state = pagerState,
+        pageSpacing = 0.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(carouselHeight)
+            .padding(horizontal = 20.dp)
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent { event: androidx.compose.ui.input.key.KeyEvent ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                when (event.key) {
+                    Key.DirectionLeft, Key.ButtonL1 -> stepPage(-1)
+                    Key.DirectionRight, Key.ButtonR1 -> stepPage(1)
+                    Key.Enter, Key.NumPadEnter, Key.DirectionCenter, Key.ButtonA -> {
+                        // Confirm opens the system that's actually on
+                        // screen, never the neighbour the pager is
+                        // animating toward.
+                        systems.getOrNull(pagerState.currentPage)
+                            ?.let { onSystemClick(it) }
+                        true
+                    }
+                    else -> false
+                }
+            }
+    ) { page ->
+        val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
+        val scale = 1f - (pageOffset * 0.1f).coerceAtMost(0.1f)
+        SystemTile(
+            system = systems[page],
+            accent = accentFor(systems[page].id),
+            onClick = { onSystemClick(systems[page]) },
+            scale = scale,
+            isFocused = page == pagerState.currentPage
+        )
+    }
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            LibraryHeader(
-                totalSystems = systems.size,
-                totalGames = systems.sumOf { it.romCount },
-                onScanClick = onScanClick,
-                onSearchClick = onSearchClick,
-                onAppsClick = onAppsClick,
-                onSettingsClick = onSettingsClick
-            )
+    Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.weight(1f))
+    PagerDots(
+        count = systems.size,
+        current = pagerState.currentPage,
+        activeColor = focusedAccent.primary,
+        pagerState = pagerState
+    )
 
-            HorizontalPager(
-                state = pagerState,
-                pageSpacing = 0.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(carouselHeight)
-                    .padding(horizontal = 20.dp)
-                    .focusRequester(focusRequester)
-                    .focusable()
-                    .onKeyEvent { event: androidx.compose.ui.input.key.KeyEvent ->
-                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                        when (event.key) {
-                            Key.DirectionLeft, Key.ButtonL1 -> stepPage(-1)
-                            Key.DirectionRight, Key.ButtonR1 -> stepPage(1)
-                            Key.Enter, Key.NumPadEnter, Key.DirectionCenter, Key.ButtonA -> {
-                                // Confirm opens the system that's actually on
-                                // screen, never the neighbour the pager is
-                                // animating toward.
-                                systems.getOrNull(pagerState.currentPage)
-                                    ?.let { onSystemClick(it) }
-                                true
-                            }
-                            else -> false
+    Spacer(modifier = Modifier.height(16.dp))
+
+    FocusedSystemMeta(system = focused)
+
+    Spacer(modifier = Modifier.height(16.dp))
+}
+
+/** Grid and list share this: a list is just a one-column grid of rows. */
+@Composable
+private fun SystemGrid(
+    systems: List<System>,
+    selectedIndex: Int,
+    columnCount: Int,
+    onFocusChange: (Int) -> Unit,
+    onSystemClick: (System) -> Unit
+) {
+    val gridState = rememberLazyGridState(initialFirstVisibleItemIndex = selectedIndex)
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(columnCount) {
+        focusRequester.requestFocus()
+    }
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
+    val isList = columnCount == 1
+    val gap = if (isList) 8.dp else 14.dp
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Grid tiles fill a clean 2-row page; list rows keep a fixed height.
+        val itemHeight = if (isList) 72.dp
+        else ((maxHeight - 16.dp * 2 - gap) / 2).coerceAtLeast(96.dp)
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columnCount),
+            state = gridState,
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    val curr = selectedIndex
+                    val target = when (event.key) {
+                        Key.DirectionDown -> (curr + columnCount).coerceAtMost(systems.lastIndex)
+                        // From the top row, let focus move up to the header.
+                        Key.DirectionUp ->
+                            if (curr < columnCount) return@onKeyEvent false
+                            else curr - columnCount
+                        Key.DirectionRight ->
+                            if (curr % columnCount == columnCount - 1) curr
+                            else (curr + 1).coerceAtMost(systems.lastIndex)
+                        Key.DirectionLeft ->
+                            if (curr % columnCount == 0) curr else curr - 1
+                        Key.Enter, Key.NumPadEnter, Key.DirectionCenter, Key.ButtonA -> {
+                            onSystemClick(systems[curr])
+                            return@onKeyEvent true
+                        }
+                        else -> return@onKeyEvent false
+                    }
+                    if (target != curr) {
+                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        onFocusChange(target)
+                        scope.launch {
+                            val layout = gridState.layoutInfo
+                            val item = layout.visibleItemsInfo.firstOrNull { it.index == target }
+                            val fullyVisible = item != null &&
+                                item.offset.y >= layout.viewportStartOffset &&
+                                item.offset.y + item.size.height <= layout.viewportEndOffset
+                            if (!fullyVisible) gridState.animateScrollToItem(target)
                         }
                     }
-            ) { page ->
-                val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
-                val scale = 1f - (pageOffset * 0.1f).coerceAtMost(0.1f)
-                SystemTile(
-                    system = systems[page],
-                    accent = accentFor(systems[page].id),
-                    onClick = { onSystemClick(systems[page]) },
-                    scale = scale,
-                    isFocused = page == pagerState.currentPage
-                )
+                    true
+                },
+            verticalArrangement = Arrangement.spacedBy(gap),
+            horizontalArrangement = Arrangement.spacedBy(gap),
+            contentPadding = PaddingValues(16.dp)
+        ) {
+            itemsIndexed(systems, key = { _, system -> system.id }) { index, system ->
+                val accent = accentFor(system.id)
+                val isFocused = index == selectedIndex
+                if (isList) {
+                    SystemRow(
+                        system = system,
+                        accent = accent,
+                        isFocused = isFocused,
+                        height = itemHeight,
+                        onClick = { onSystemClick(system) }
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(itemHeight)
+                            .then(
+                                if (isFocused) Modifier.border(2.dp, accent.primary, RoundedCornerShape(20.dp))
+                                else Modifier
+                            )
+                    ) {
+                        SystemTile(
+                            system = system,
+                            accent = accent,
+                            onClick = { onSystemClick(system) },
+                            isFocused = isFocused,
+                            compact = true
+                        )
+                    }
+                }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            PagerDots(
-                count = systems.size,
-                current = pagerState.currentPage,
-                activeColor = focusedAccent.primary,
-                pagerState = pagerState
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            FocusedSystemMeta(system = focused)
-
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -245,6 +408,8 @@ fun SystemListScreen(
 private fun LibraryHeader(
     totalSystems: Int,
     totalGames: Int,
+    layout: LibraryLayout,
+    onLayoutClick: () -> Unit,
     onScanClick: () -> Unit,
     onSearchClick: () -> Unit,
     onAppsClick: () -> Unit,
@@ -271,6 +436,14 @@ private fun LibraryHeader(
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
+        CircularIconButton(onClick = onLayoutClick) {
+            Icon(
+                imageVector = layoutIcon(layout),
+                contentDescription = "Change layout",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
         CircularIconButton(onClick = onScanClick) {
             Icon(
                 imageVector = Icons.Filled.Refresh,
@@ -347,22 +520,24 @@ private fun SystemTile(
     accent: SystemAccent,
     onClick: () -> Unit,
     scale: Float = 1f,
-    isFocused: Boolean = false
+    isFocused: Boolean = false,
+    compact: Boolean = false
 ) {
     val imageRes = imageFor(system.id)
+    val shape = RoundedCornerShape(if (compact) 20.dp else 28.dp)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(28.dp))
+            .clip(shape)
             .background(
                 Brush.linearGradient(
-                    colors = listOf(
-                        accent.primary,
-                        accent.secondary,
-                        Color(0xFF0B0B10)
-                    )
+                    // Near-square compact tiles would put the logo over the primary colour;
+                    // pull secondary forward so the logo always sits on secondary -> dark.
+                    0f to accent.primary,
+                    (if (compact) 0.35f else 0.5f) to accent.secondary,
+                    1f to Color(0xFF0B0B10)
                 )
             )
             .clickable { onClick() }
@@ -400,16 +575,18 @@ private fun SystemTile(
             )
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(Color(0xEE0B0B10), Color.Transparent),
-                        endX = 700f
+        if (!compact) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(Color(0xEE0B0B10), Color.Transparent),
+                            endX = 700f
+                        )
                     )
-                )
-        )
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -424,7 +601,7 @@ private fun SystemTile(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(if (compact) 14.dp else 24.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -448,12 +625,13 @@ private fun SystemTile(
                 }
             }
 
-            Column(modifier = Modifier.fillMaxWidth(0.55f)) {
+            Column(modifier = Modifier.fillMaxWidth(if (compact) 0.7f else 0.55f)) {
                 Text(
                     text = system.name,
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.ExtraBold
-                    ),
+                    style = (
+                        if (compact) MaterialTheme.typography.titleMedium
+                        else MaterialTheme.typography.headlineMedium
+                    ).copy(fontWeight = FontWeight.ExtraBold),
                     color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -466,6 +644,82 @@ private fun SystemTile(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SystemRow(
+    system: System,
+    accent: SystemAccent,
+    isFocused: Boolean,
+    height: Dp,
+    onClick: () -> Unit
+) {
+    val imageRes = imageFor(system.id)
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(shape)
+            .background(
+                if (isFocused) accent.primary.copy(alpha = 0.22f)
+                else MaterialTheme.colorScheme.surface
+            )
+            .then(if (isFocused) Modifier.border(2.dp, accent.primary, shape) else Modifier)
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .aspectRatio(1.4f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(
+                    Brush.linearGradient(listOf(accent.secondary, Color(0xFF0B0B10)))
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (system.id == MainViewModel.FAVORITES_SYSTEM_ID) {
+                Icon(
+                    imageVector = Icons.Filled.Favorite,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.padding(6.dp)
+                )
+            } else if (imageRes != null) {
+                AsyncImage(
+                    model = imageRes,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(4.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = system.name,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = system.emulatorType.ifBlank { "—" },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = "${system.romCount} ${if (system.romCount == 1) "game" else "games"}",
+            style = MaterialTheme.typography.titleSmall,
+            color = if (isFocused) accent.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

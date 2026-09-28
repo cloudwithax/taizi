@@ -89,6 +89,13 @@ class MainViewModel @Inject constructor(
     private val _nowPlayingSystems = MutableStateFlow<Set<String>>(emptySet())
     val nowPlayingSystems: StateFlow<Set<String>> = _nowPlayingSystems.asStateFlow()
 
+    // Systems default to the carousel; games have no carousel, so grid.
+    private val _systemsLayout = MutableStateFlow(LibraryLayout.CAROUSEL)
+    val systemsLayout: StateFlow<LibraryLayout> = _systemsLayout.asStateFlow()
+
+    private val _gamesLayout = MutableStateFlow(LibraryLayout.GRID)
+    val gamesLayout: StateFlow<LibraryLayout> = _gamesLayout.asStateFlow()
+
     private val _nowPlaying = MutableStateFlow<NowPlaying?>(null)
     val nowPlaying: StateFlow<NowPlaying?> = _nowPlaying.asStateFlow()
 
@@ -125,6 +132,10 @@ class MainViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             _nowPlayingSystems.value = repository.getNowPlayingSystems()
+        }
+        viewModelScope.launch {
+            _systemsLayout.value = repository.getSystemsLayout()
+            _gamesLayout.value = repository.getGamesLayout()
         }
         viewModelScope.launch {
             repository.loadCachedLibraryIfAvailable()
@@ -234,6 +245,16 @@ class MainViewModel @Inject constructor(
             repository.setNowPlayingEnabled(systemId, enabled)
             _nowPlayingSystems.value = repository.getNowPlayingSystems()
         }
+    }
+
+    fun setSystemsLayout(layout: LibraryLayout) {
+        _systemsLayout.value = layout
+        viewModelScope.launch { repository.setSystemsLayout(layout) }
+    }
+
+    fun setGamesLayout(layout: LibraryLayout) {
+        _gamesLayout.value = layout
+        viewModelScope.launch { repository.setGamesLayout(layout) }
     }
 
     fun dismissNowPlaying() {

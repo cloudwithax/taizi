@@ -28,6 +28,10 @@ interface LibraryRepository {
     suspend fun getBiosStatus(systemId: String): BiosStatus
     suspend fun getNowPlayingSystems(): Set<String>
     suspend fun setNowPlayingEnabled(systemId: String, enabled: Boolean)
+    suspend fun getSystemsLayout(): LibraryLayout
+    suspend fun setSystemsLayout(layout: LibraryLayout)
+    suspend fun getGamesLayout(): LibraryLayout
+    suspend fun setGamesLayout(layout: LibraryLayout)
     suspend fun findSystemForFolder(folderName: String): System?
     suspend fun clearCache()
     suspend fun setScraperCredentials(username: String, password: String)
