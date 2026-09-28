@@ -591,11 +591,17 @@ class LibraryRepositoryImpl(
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             when (packageName) {
                 "com.flycast.emulator" -> {
-                    // Flycast's filter only declares scheme="file" so content://
-                    // URIs won't match through filter resolution. Target the
-                    // activity directly — its native AndroidStorage only accepts
-                    // SAF URIs anyway.
-                    setClassName(packageName, "com.flycast.emulator.MainActivity")
+                    // Flycast's VIEW filter only declares scheme="file", so
+                    // target the activity directly. Its native AndroidStorage
+                    // only understands content:// (SAF) URIs or bare paths: a
+                    // file:// URI is handed to stat() verbatim and fails, so
+                    // pass the bare path instead. The activity class moved from
+                    // com.reicast.emulator to com.flycast.emulator across
+                    // Flycast versions, so take whichever the build declares.
+                    component = context.packageManager
+                        .getLaunchIntentForPackage(packageName)?.component
+                        ?: android.content.ComponentName(packageName, "com.reicast.emulator.MainActivity")
+                    setDataAndType(Uri.parse(game.path), "application/octet-stream")
                 }
                 "com.dsemu.drastic" -> {
                     // DraStic's filter only matches paths ending in .nds, so
