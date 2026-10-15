@@ -231,7 +231,7 @@ fun SettingsScreen(
                         subtitle = "Force full rescan of ROM folders",
                         icon = MaterialIcons.Filled.Refresh,
                         onClick = {
-                            viewModel.triggerFullScan()
+                            viewModel.triggerFullScan(resync = true)
                             onNavigateUp()
                         }
                     )

@@ -109,7 +109,16 @@ class LibraryRepositoryImpl(
 
                 // Detect BIOS folder and exclude from game scanning
                 val biosFolder: File? = systemFolders.find { it.name.equals("bios", true) }
-                val gameFolders: List<File> = if (biosFolder != null) systemFolders - biosFolder else systemFolders
+                // Libraries are sometimes grouped one level deeper by maker
+                // (roms/Sony/PS1, roms/Nintendo/SNES). An unrecognised folder
+                // whose subfolders are systems stands in for those subfolders.
+                val gameFolders: List<File> = (systemFolders - setOfNotNull(biosFolder)).flatMap { folder ->
+                    if (matchSystemId(folder.name, customMappings) != null) return@flatMap listOf(folder)
+                    folder.listFiles { f -> f.isDirectory }
+                        ?.filter { matchSystemId(it.name, customMappings) != null }
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: listOf(folder)
+                }
 
                 // Scan each system folder in parallel (limited concurrency)
                 val rawSystems = coroutineScope {
@@ -143,30 +152,32 @@ class LibraryRepositoryImpl(
                     emptyMap()
                 }
 
-                // Single streaming pass: walk each system's folders and parse every
+                // Single streaming pass: walk each system's folders and report every
                 // ROM as it's discovered so the UI sees each filename live. No
-                // pre-count means total is 0 until the scan finishes.
+                // pre-count means total is 0 until the scan finishes. The count
+                // includes tracks that buildGames later folds into their sheet.
                 var scannedCount = 0
                 val gamesBySystem = mutableMapOf<String, List<Game>>()
                 for (system in systems) {
                     ensureActive()
                     val seen = hashSetOf<String>()
-                    val games = mutableListOf<Game>()
+                    val candidates = mutableListOf<RomCandidate>()
                     val folders = foldersById[system.id] ?: listOf(File(system.path))
                     for (folder in folders) {
-                        walkRomFiles(folder, system.id) { file ->
-                            if (seen.add(file.absolutePath)) {
+                        walkGames(folder, system.id) { candidate ->
+                            if (seen.add(candidate.file.absolutePath)) {
                                 scannedCount++
-                                val game = parseGameFile(file, system.id)
-                                onProgress?.invoke(game.name, system.name, scannedCount, 0)
-                                games.add(game)
+                                onProgress?.invoke(cleanGameName(candidate.title), system.name, scannedCount, 0)
+                                candidates.add(candidate)
                             }
                         }
                     }
-                    gamesBySystem[system.id] = games.sortedBy { it.name.lowercase() }
+                    gamesBySystem[system.id] = buildGames(candidates, system.id)
+                        .sortedBy { it.name.lowercase() }
                 }
                 // Final emit so the UI lands on "N / N ROMs"
-                onProgress?.invoke("", "", scannedCount, scannedCount)
+                val gameCount = gamesBySystem.values.sumOf { it.size }
+                onProgress?.invoke("", "", gameCount, gameCount)
 
                 boxArtDao.deleteNonGameMatches()
 
@@ -246,9 +257,7 @@ class LibraryRepositoryImpl(
         val folderName = folder.name.lowercase().replace("_", " ").trim()
 
         // Try to find matching system definition
-        val systemDef = systemDefinitions.values.firstOrNull { def ->
-            def.folderNames.any { it.equals(folderName, true) }
-        }
+        val systemDef = findSystemDefinition(folder.name)
 
         val (systemId, systemName) = if (systemDef != null) {
             systemDef.id to systemDef.name
@@ -295,6 +304,23 @@ class LibraryRepositoryImpl(
             lastScanned = java.lang.System.currentTimeMillis()
         )
     }
+
+    /**
+     * The definition whose folder names match [name], ignoring case and
+     * punctuation ("PlayStation 2", "sega-cd"). No-Intro / Redump style names
+     * ("Sony - PlayStation") fall back to the part after the last " - ".
+     */
+    private fun findSystemDefinition(name: String): SystemDefinition? {
+        fun normalize(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
+        fun find(n: String) = normalize(n).takeIf { it.isNotEmpty() }?.let { key ->
+            systemDefinitions.values.firstOrNull { def -> def.folderNames.any { normalize(it) == key } }
+        }
+        return find(name) ?: name.substringAfterLast(" - ", "").takeIf { it.isNotBlank() }?.let(::find)
+    }
+
+    private fun matchSystemId(name: String, customMappings: Map<String, String>): String? =
+        findSystemDefinition(name)?.id
+            ?: customMappings[name.lowercase().replace("_", " ").trim()]
 
     private fun isSkippableDir(name: String): Boolean {
         val lower = name.lowercase()
@@ -353,42 +379,161 @@ class LibraryRepositoryImpl(
         return count
     }
 
-    private fun collectRomFiles(folder: File, systemId: String): List<File> {
-        val files = mutableListOf<File>()
-        walkRomFiles(folder, systemId) { files.add(it) }
-        return files
-    }
-
-    private inline fun walkRomFiles(folder: File, systemId: String, onFile: (File) -> Unit) {
-        if (!folder.exists()) return
+    /**
+     * Walks a system folder and reports every game in it: ROM files at any
+     * depth (players sort into A-Z, genre or per-game folders), plus folders
+     * that are a game in their own right. Game folders aren't descended into,
+     * so the loose files inside a PS3 or DOS install don't show up as games.
+     */
+    private inline fun walkGames(root: File, systemId: String, onGame: (RomCandidate) -> Unit) {
+        if (!root.exists()) return
         val def = systemDefinitions[systemId] ?: return
         val validExtensions = def.extensions.map { it.lowercase() }.toSet()
 
         val stack = ArrayDeque<Pair<File, Int>>()
-        stack.addLast(folder to 1)
+        stack.addLast(root to 1)
         while (stack.isNotEmpty()) {
             val (dir, depth) = stack.removeLast()
-            if (depth > 2) continue
             dir.listFiles()?.forEach { file ->
                 if (file.isDirectory) {
-                    if (!isSkippableDir(file.name)) stack.addLast(file to depth + 1)
+                    if (isSkippableDir(file.name)) return@forEach
+                    val folderGame = folderGame(file, systemId, validExtensions)
+                    if (folderGame != null) onGame(folderGame)
+                    else if (depth < MAX_SCAN_DEPTH) stack.addLast(file to depth + 1)
                 } else if (isRomFile(file, validExtensions)) {
-                    onFile(file)
+                    onGame(RomCandidate(file, titleFor(file, root)))
                 }
             }
         }
     }
 
-    private fun parseGameFile(file: File, systemId: String): Game {
-        val filename = file.nameWithoutExtension
-        val cleanName = cleanGameName(filename)
+    /** [dir] as a single game, or null when it's just a folder to look inside. */
+    private fun folderGame(dir: File, systemId: String, validExtensions: Set<String>): RomCandidate? {
+        // ES-DE convention: a folder named like a ROM ("Demon's Souls.ps3",
+        // "Doom.dos") is one game. Launch the same-named file inside when
+        // there is one, else the folder itself.
+        val ext = dir.name.substringAfterLast('.', "")
+        if (ext.isNotEmpty() && ".${ext.lowercase()}" in validExtensions) {
+            val inner = File(dir, dir.name)
+            return RomCandidate(if (inner.isFile) inner else dir, dir.name.substringBeforeLast('.'))
+        }
+        return when (systemId) {
+            // Disc rips and PSN installs are folders, and the PS3 emulators
+            // take the folder as the game path, as ES-DE passes it.
+            "ps3" -> if (isPs3GameDir(dir)) RomCandidate(dir, dir.name) else null
+            "dos" -> dosLaunchFile(dir)?.let { RomCandidate(it, dir.name) }
+            else -> null
+        }
+    }
+
+    private fun childIgnoreCase(dir: File, name: String): File? =
+        dir.listFiles()?.firstOrNull { it.name.equals(name, true) }
+
+    private fun isPs3GameDir(dir: File): Boolean {
+        // Disc layout: <game>/PS3_GAME/PARAM.SFO
+        childIgnoreCase(dir, "PS3_GAME")?.let { return childIgnoreCase(it, "PARAM.SFO") != null }
+        // PSN / installed layout: <game>/PARAM.SFO + USRDIR
+        return childIgnoreCase(dir, "PARAM.SFO") != null && childIgnoreCase(dir, "USRDIR") != null
+    }
+
+    /**
+     * The file DOSBox should start for a game folder: a .conf if there is one,
+     * then an executable named after the folder, then any .bat, then any
+     * executable that isn't an installer or helper.
+     */
+    private fun dosLaunchFile(dir: File): File? {
+        val runnable = dir.listFiles { f -> f.isFile && f.extension.lowercase() in DOS_RUNNABLE }
+            ?.sortedBy { it.name.lowercase() }
+            ?.takeIf { it.isNotEmpty() }
+            ?: return null
+        val preferred = runnable
+            .filter { it.nameWithoutExtension.lowercase() !in DOS_HELPERS }
+            .ifEmpty { runnable }
+        return preferred.firstOrNull { it.extension.equals("conf", true) }
+            ?: preferred.firstOrNull { it.nameWithoutExtension.equals(dir.name, true) }
+            ?: preferred.firstOrNull { it.extension.equals("bat", true) }
+            ?: preferred.first()
+    }
+
+    /**
+     * The name a ROM file should be listed under. Usually its own, but dumps
+     * kept in per-game folders often carry a generic name ("disc.gdi",
+     * "default.xbe") or sit inside a container folder (Wii U "code/"), and
+     * then the enclosing game folder is the real title. [root] stops the climb
+     * so a loose "disc.gdi" isn't named after the system folder.
+     */
+    private fun titleFor(file: File, root: File?): String {
+        var dir = file.parentFile
+        val generic = GENERIC_ROM_NAME.matches(file.nameWithoutExtension) ||
+                (dir != null && dir.name.lowercase() in CONTAINER_DIRS)
+        if (!generic) return file.nameWithoutExtension
+        while (dir != null && dir.name.lowercase() in CONTAINER_DIRS) dir = dir.parentFile
+        return if (dir == null || dir == root) file.nameWithoutExtension else dir.name
+    }
+
+    /**
+     * Turns raw candidates into games. Files a .cue/.gdi/.ccd/.m3u points at
+     * are folded into that sheet instead of listed on their own (every .bin
+     * track of a cue/bin rip used to show up as a game), and loose
+     * "(Disc N)" files with the same name become one multi-disc game.
+     */
+    private fun buildGames(candidates: List<RomCandidate>, systemId: String): List<Game> {
+        val referenced = hashSetOf<String>()
+        for (candidate in candidates) {
+            if (candidate.file.isFile) referenced += referencedFiles(candidate.file)
+        }
+        val visible = candidates.filter { it.file.absolutePath.lowercase() !in referenced }
+
+        val groups = visible.groupBy { candidate ->
+            val tag = DISC_TAG.find(candidate.file.name)
+            if (tag == null || !candidate.file.isFile) candidate.file.absolutePath
+            else "${candidate.file.parent}/${candidate.file.name.removeRange(tag.range).lowercase()}"
+        }
+        return groups.values.map { group ->
+            val discs = group.sortedBy { DISC_TAG.find(it.file.name)?.groupValues?.get(1)?.toIntOrNull() ?: 0 }
+            val game = parseGame(discs.first(), systemId)
+            if (discs.size > 1) game.copy(discs = discs.map { GameDisc(it.file.absolutePath, it.file.name) })
+            else game
+        }
+    }
+
+    /** Lowercased absolute paths of the files a disc sheet or playlist points at. */
+    private fun referencedFiles(file: File): List<String> {
+        val ext = file.extension.lowercase()
+        if (ext !in SHEET_EXTENSIONS || file.length() > MAX_SHEET_BYTES) return emptyList()
+        val dir = file.parentFile ?: return emptyList()
+        val names = when (ext) {
+            "ccd" -> listOf("img", "sub").map { "${file.nameWithoutExtension}.$it" }
+            else -> runCatching { file.readLines() }.getOrDefault(emptyList()).mapNotNull { line ->
+                when (ext) {
+                    "cue" -> CUE_FILE.find(line)?.groupValues?.get(1)
+                    "gdi" -> GDI_TRACK.find(line)?.let { m -> m.groupValues[1].ifEmpty { m.groupValues[2] } }
+                    else -> line.trim().takeIf { it.isNotEmpty() && !it.startsWith("#") }
+                }
+            }
+        }
+        return names.map {
+            File(dir, it.replace('\\', '/').removePrefix("./")).absolutePath.lowercase()
+        }
+    }
+
+    /** The name sent to ScreenScraper: the listed title, not "disc.gdi". */
+    private fun scrapeRomName(file: File): String {
+        if (file.isDirectory) return file.name
+        val title = titleFor(file, null)
+        return if (title == file.nameWithoutExtension) file.name else "$title.${file.extension}"
+    }
+
+    private fun parseGame(candidate: RomCandidate, systemId: String): Game {
+        val file = candidate.file
+        val cleanName = cleanGameName(candidate.title)
 
         // Check for multi-disc patterns
         val discs = mutableListOf(GameDisc(file.absolutePath, file.name))
 
         // Look for .m3u playlist
         val m3uFile = File(file.parentFile, "${file.nameWithoutExtension}.m3u")
-        if (m3uFile.exists()) {
+        if (file.isFile && m3uFile.exists()) {
             val m3uDiscs = parseM3U(m3uFile)
             if (m3uDiscs.isNotEmpty()) {
                 discs.clear()
@@ -400,7 +545,7 @@ class LibraryRepositoryImpl(
             path = file.absolutePath,
             name = cleanName,
             systemId = systemId,
-            size = file.length(),
+            size = if (file.isFile) file.length() else 0L,
             modified = file.lastModified(),
             playCount = 0,
             lastPlayed = null,
@@ -439,8 +584,7 @@ class LibraryRepositoryImpl(
             .replace(Regex("\\[[^\\[\\]]*]"), "")
             .replace(Regex("\\(v[0-9.]+\\),?\\s*"), "")
             .replace(Regex("\\(Rev\\s*[0-9]+\\)"), "")
-            .replace(Regex("\\(Disc\\s*[0-9]+\\)"), "")
-            .replace(Regex("\\(Disk\\s*[0-9]+\\)"), "")
+            .replace(DISC_TAG, "")
             .replace(Regex("\\([A-Za-z]{2}\\)"), "")
             .replace(Regex("^[\\s._-]+|[\\s._-]+$"), "")
             .replace(Regex("\\s{2,}"), " ")
@@ -485,8 +629,9 @@ class LibraryRepositoryImpl(
             } else scanned
             if (newSystem != null) {
                 val newSystems = currentLibrary.systems.map { if (it.id == systemId) newSystem else it }
-                val newGames = collectRomFiles(File(newSystem.path), newSystem.id)
-                    .map { parseGameFile(it, newSystem.id) }
+                val candidates = mutableListOf<RomCandidate>()
+                walkGames(File(newSystem.path), newSystem.id) { candidates.add(it) }
+                val newGames = buildGames(candidates, newSystem.id)
                     .sortedBy { it.name.lowercase() }
 
                 val newLibrary = currentLibrary.copy(
@@ -983,7 +1128,7 @@ class LibraryRepositoryImpl(
             "ps2" to SystemDefinition("ps2", "PlayStation 2", listOf("ps2", "playstation2"), listOf(".iso", ".cso", ".chd", ".bin", ".gz", ".mdf"), "retroarch", "pcsx2", emptyList(), "ps2"),
             "psp" to SystemDefinition("psp", "PlayStation Portable", listOf("psp", "playstationportable", "pspminis"), listOf(".iso", ".cso", ".pbp"), "ppsspp", null, emptyList(), "psp"),
             "psvita" to SystemDefinition("psvita", "PlayStation Vita", listOf("psvita", "vita", "psv"), listOf(".vpk", ".zip", ".iso"), "standalone", null, emptyList(), "psvita"),
-            "ps3" to SystemDefinition("ps3", "PlayStation 3", listOf("ps3", "playstation3"), listOf(".iso", ".pkg", ".sfo"), "standalone", null, emptyList(), "ps3"),
+            "ps3" to SystemDefinition("ps3", "PlayStation 3", listOf("ps3", "playstation3"), listOf(".iso", ".pkg", ".ps3", ".ps3dir"), "standalone", null, emptyList(), "ps3"),
 
             // ---------- Microsoft ----------
             "xbox" to SystemDefinition("xbox", "Xbox", listOf("xbox"), listOf(".iso", ".xiso", ".xbe"), "standalone", null, emptyList(), "xbox"),
@@ -997,7 +1142,7 @@ class LibraryRepositoryImpl(
             "sega32x" to SystemDefinition("sega32x", "Sega 32X", listOf("sega32x", "32x", "sega32xjp", "sega32xna"), listOf(".32x", ".smd", ".bin"), "retroarch", "picodrive", emptyList(), "sega32x"),
             "segacd" to SystemDefinition("segacd", "Sega CD", listOf("segacd", "sega cd", "megacd", "mega cd", "mdcd", "megacdjp"), listOf(".cue", ".bin", ".iso", ".chd"), "retroarch", "genesis_plus_gx", listOf("bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin"), "segacd"),
             "saturn" to SystemDefinition("saturn", "Sega Saturn", listOf("saturn", "segasaturn", "saturnjp", "st-v", "stv"), listOf(".cue", ".bin", ".iso", ".chd", ".mds"), "retroarch", "kronos", listOf("saturn_bios.bin"), "saturn"),
-            "dc" to SystemDefinition("dc", "Dreamcast", listOf("dc", "dreamcast"), listOf(".gdi", ".cdi", ".chd", ".m3u"), "flycast", null, listOf("dc_boot.bin", "dc_flash.bin"), "dc"),
+            "dc" to SystemDefinition("dc", "Dreamcast", listOf("dc", "dreamcast"), listOf(".gdi", ".cdi", ".chd", ".cue", ".m3u"), "flycast", null, listOf("dc_boot.bin", "dc_flash.bin"), "dc"),
             "naomi" to SystemDefinition("naomi", "Sega NAOMI", listOf("naomi", "naomi2", "naomigd", "atomiswave"), listOf(".zip", ".bin", ".chd", ".lst"), "flycast", "flycast", emptyList(), "naomi"),
 
             // ---------- NEC ----------
@@ -1493,6 +1638,7 @@ class LibraryRepositoryImpl(
             val games = library.gamesBySystem[systemId] ?: return@withContext Result.success(0)
             var scraped = 0
             val downloadSemaphore = Semaphore(4)
+            val titleOnly = titleOnlyRomPaths()
 
             val chunks = games.chunked(4)
             var processed = 0
@@ -1504,9 +1650,9 @@ class LibraryRepositoryImpl(
                 for (game in chunk) {
                     processed++
                     onProgress?.invoke(game.name, processed, games.size)
-                    if (game.boxArtPath != null) continue
+                    if (game.boxArtPath != null || game.path in titleOnly) continue
 
-                    val info = scraperService.scrapeGame(File(game.path), systemId) ?: continue
+                    val info = scraperService.scrapeGame(File(game.path), systemId, scrapeRomName(File(game.path))) ?: continue
                     results.add(ScrapeResult(game, info))
                     delay(250)
                 }
@@ -1578,6 +1724,7 @@ class LibraryRepositoryImpl(
             }
             var scraped = 0
             val downloadSemaphore = Semaphore(4)
+            val titleOnly = titleOnlyRomPaths()
 
             // Process in chunks: lookup API sequentially (rate limited), download images in parallel
             val chunks = allGames.chunked(4)
@@ -1598,9 +1745,9 @@ class LibraryRepositoryImpl(
                     val systemName = system?.name ?: systemId
                     onProgress?.invoke(game.name, systemName, processed, allGames.size)
 
-                    if (game.boxArtPath != null) continue
+                    if (game.boxArtPath != null || game.path in titleOnly) continue
 
-                    val info = scraperService.scrapeGame(File(game.path), systemId) ?: continue
+                    val info = scraperService.scrapeGame(File(game.path), systemId, scrapeRomName(File(game.path))) ?: continue
                     results.add(ScrapeResult(systemId, game, info))
                     delay(250)
                 }
@@ -1663,6 +1810,14 @@ class LibraryRepositoryImpl(
         }
     }
 
+    /**
+     * ROMs ScreenScraper already matched but had no box art for. They have no
+     * art to show, so without this every scrape looks them up again and
+     * counts them as newly scraped.
+     */
+    private suspend fun titleOnlyRomPaths(): Set<String> =
+        boxArtDao.getAll().filter { it.artPath.isBlank() }.mapTo(HashSet()) { it.romPath }
+
     private fun updateGameInLibrary(systemId: String, updatedGame: Game) {
         val current = _library.value
         val updatedGames = current.gamesBySystem.toMutableMap()
@@ -1683,14 +1838,40 @@ class LibraryRepositoryImpl(
         val theme: String
     )
 
+    /** A launchable entry found on disk: a ROM file, or a folder that is one game. */
+    private class RomCandidate(val file: File, val title: String)
+
     companion object {
         const val ALL_EVENTS = FileObserver.ALL_EVENTS
         val ARCHIVE_EXTENSIONS = setOf(".zip", ".7z", ".rar")
+        // Levels below a system folder that are searched for ROMs.
+        const val MAX_SCAN_DEPTH = 6
         val SKIP_DIRS = setOf(
             "bios", "images", "imgs", "media", "manuals", "videos", "video",
             "screenshots", "marquees", "box", "boxart", "cover", "covers",
             "downloaded_images", "gamelist", "cheats", "saves", "savestates",
-            "states", "patches", "overlays", "shaders", "textures"
+            "states", "patches", "overlays", "shaders", "textures",
+            // Frontend media folders (ES-DE, Skraper) and Switch extras that
+            // aren't standalone games.
+            "manual", "music", "snap", "snaps", "wheel", "fanart", "titlescreens",
+            "miximages", "3dboxes", "backcovers", "physicalmedia", "thumbnails",
+            "update", "updates", "dlc"
+        )
+        // Folders that hold a game's files but are never named after it.
+        val CONTAINER_DIRS = setOf("code", "content", "meta", "ps3_game", "usrdir", "sce_sys")
+        val GENERIC_ROM_NAME = Regex(
+            "(disc|disk|cd|gd|dvd|game|rom|image|default|eboot|boot|main|track)[\\s_-]*\\d*",
+            RegexOption.IGNORE_CASE
+        )
+        val DISC_TAG = Regex("\\((?:Disc|Disk|CD)\\s*(\\d+)(?:\\s*of\\s*\\d+)?\\)", RegexOption.IGNORE_CASE)
+        val SHEET_EXTENSIONS = setOf("cue", "gdi", "ccd", "m3u")
+        const val MAX_SHEET_BYTES = 64 * 1024L
+        val CUE_FILE = Regex("^\\s*FILE\\s+\"?(.+?)\"?\\s+\\S+\\s*$", RegexOption.IGNORE_CASE)
+        val GDI_TRACK = Regex("^\\s*\\d+\\s+\\d+\\s+\\d+\\s+\\d+\\s+(?:\"([^\"]+)\"|(\\S+))")
+        val DOS_RUNNABLE = setOf("conf", "bat", "exe", "com")
+        val DOS_HELPERS = setOf(
+            "setup", "install", "installer", "uninstal", "uninstall", "config",
+            "setsound", "sound", "readme", "dos4gw", "cwsdpmi"
         )
         val SKIP_FILES = setOf(
             "gamelist.xml", "systeminfo.txt", "metadata.txt", "_info.txt",

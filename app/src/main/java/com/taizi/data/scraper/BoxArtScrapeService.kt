@@ -26,7 +26,9 @@ data class ScrapeStatus(
     val systemName: String = "",
     val current: Int = 0,
     val total: Int = 0,
-    val isRunning: Boolean = false
+    val isRunning: Boolean = false,
+    /** Games given art or a title by the run that just finished. */
+    val scraped: Int = 0
 )
 
 @AndroidEntryPoint
@@ -95,6 +97,7 @@ class BoxArtScrapeService : Service() {
                 updateNotification(gameName, systemName, current, total)
             }
 
+            val scraped = result.getOrDefault(0)
             result.fold(
                 onSuccess = { count ->
                     Log.d(TAG, "Scrape complete: $count games scraped")
@@ -106,7 +109,7 @@ class BoxArtScrapeService : Service() {
                 }
             )
 
-            _status.value = ScrapeStatus(isRunning = false)
+            _status.value = ScrapeStatus(isRunning = false, scraped = scraped)
             stopSelf()
         }
     }

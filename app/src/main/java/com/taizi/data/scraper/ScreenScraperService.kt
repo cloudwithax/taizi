@@ -229,14 +229,22 @@ class ScreenScraperService(private val context: Context) {
             .trim()
     }
 
-    suspend fun scrapeGame(romFile: File, systemId: String): ScrapedGame? = withContext(Dispatchers.IO) {
+    /**
+     * [romName] is the filename sent for name matching. It differs from the
+     * file's own name for games kept in folders ("disc.gdi" in "Crazy Taxi/").
+     */
+    suspend fun scrapeGame(
+        romFile: File,
+        systemId: String,
+        romName: String = romFile.name
+    ): ScrapedGame? = withContext(Dispatchers.IO) {
         val platformId = PLATFORM_IDS[systemId] ?: return@withContext null
 
         val hash = RomHasher.hash(romFile, systemId)
         val params = mutableMapOf(
             "systemeid" to platformId.toString(),
             "romtype" to "rom",
-            "romnom" to romFile.name
+            "romnom" to romName
         )
         if (hash != null) {
             params["crc"] = hash.crc32

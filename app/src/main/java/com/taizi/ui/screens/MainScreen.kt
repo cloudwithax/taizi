@@ -1,6 +1,11 @@
 package com.taizi.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -12,20 +17,24 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FolderOpen
 
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +47,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -57,6 +68,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.taizi.R
+import com.taizi.data.scraper.ScrapeStatus
 import com.taizi.ui.components.StatusBar
 import com.taizi.ui.theme.BrandAccent
 import com.taizi.ui.theme.TaiziTheme
@@ -70,6 +82,8 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
     val scrapeStatus by viewModel.scrapeStatus.collectAsState()
     val playerPrompt by viewModel.playerPrompt.collectAsState()
     val playerAlert by viewModel.playerAlert.collectAsState()
+    val resyncing by viewModel.resyncing.collectAsState()
+    val syncMessage by viewModel.syncMessage.collectAsState()
 
     // Gesture-nav Back is swallowed while the guard is up; the hardware key is
     // consumed in MainActivity so it can be held instead.
@@ -104,7 +118,7 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
                                 is MainUiState.LibraryLoaded -> SystemListScreen(
                                     systems = viewModel.systemsForDisplay(state.library),
                                     onSystemClick = { viewModel.navigateToSystem(it.id) },
-                                    onScanClick = { viewModel.triggerFullScan() },
+                                    onScanClick = { viewModel.triggerFullScan(resync = true) },
                                     onSelectFolder = onSelectFolder,
                                     onSettingsClick = { viewModel.setScreen(Screen.Settings) },
                                     onSearchClick = { viewModel.setScreen(Screen.Search) },
@@ -113,7 +127,7 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
                                 )
                                 is MainUiState.Error -> ErrorContent(
                                     message = state.message,
-                                    onRetry = { viewModel.triggerFullScan() }
+                                    onRetry = { viewModel.triggerFullScan(resync = true) }
                                 )
                             }
                         }
@@ -147,6 +161,18 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
                 }
             }
 
+            // Below Now Playing so it never covers the hold-to-exit guard.
+            SyncToast(
+                resyncing = resyncing,
+                scanProgress = scanProgress,
+                scrapeStatus = scrapeStatus,
+                message = syncMessage,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = 24.dp, vertical = 20.dp)
+            )
+
             nowPlaying?.let { playing ->
                 NowPlayingScreen(
                     game = playing.game,
@@ -172,6 +198,115 @@ fun MainScreen(viewModel: MainViewModel, onSelectFolder: () -> Unit = {}) {
                     message = message,
                     onDismiss = viewModel::dismissPlayerAlert
                 )
+            }
+        }
+    }
+}
+
+private data class SyncToastContent(
+    val title: String,
+    val detail: String,
+    val count: String,
+    val inProgress: Boolean
+)
+
+/**
+ * Progress for background library work: a rescan of an already-loaded library,
+ * then the artwork scrape that follows it, then a brief outcome line.
+ */
+@Composable
+private fun SyncToast(
+    resyncing: Boolean,
+    scanProgress: ScanProgress,
+    scrapeStatus: ScrapeStatus,
+    message: String?,
+    modifier: Modifier = Modifier
+) {
+    val content = when {
+        resyncing -> SyncToastContent(
+            title = "Rescanning library",
+            detail = listOf(scanProgress.systemName, scanProgress.gameName)
+                .filter { it.isNotBlank() }
+                .joinToString(" · "),
+            count = if (scanProgress.count > 0) "${scanProgress.count} ROMs" else "",
+            inProgress = true
+        )
+        scrapeStatus.isRunning -> SyncToastContent(
+            title = "Scraping artwork",
+            detail = listOf(scrapeStatus.systemName, scrapeStatus.gameName)
+                .filter { it.isNotBlank() }
+                .joinToString(" · "),
+            count = if (scrapeStatus.total > 0) "${scrapeStatus.current} / ${scrapeStatus.total}" else "",
+            inProgress = true
+        )
+        message != null -> SyncToastContent(message, "", "", inProgress = false)
+        else -> null
+    }
+    // Keep the last content around so the exit animation has something to show.
+    var shown by remember { mutableStateOf(content) }
+    if (content != null) shown = content
+
+    AnimatedVisibility(
+        visible = content != null,
+        enter = fadeIn() + slideInVertically { it / 2 },
+        exit = fadeOut() + slideOutVertically { it / 2 },
+        modifier = modifier
+    ) {
+        val toast = shown ?: return@AnimatedVisibility
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 6.dp,
+            modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth()
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                if (toast.inProgress) {
+                    CircularProgressIndicator(
+                        color = BrandAccent,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = BrandAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = toast.title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    if (toast.detail.isNotBlank()) {
+                        Text(
+                            text = toast.detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                if (toast.count.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = toast.count,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

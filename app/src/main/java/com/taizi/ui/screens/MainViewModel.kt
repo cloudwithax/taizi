@@ -86,6 +86,14 @@ class MainViewModel @Inject constructor(
     private val _scanProgress = MutableStateFlow(ScanProgress())
     val scanProgress: StateFlow<ScanProgress> = _scanProgress.asStateFlow()
 
+    /** A user-requested rescan running over an already-loaded library. */
+    private val _resyncing = MutableStateFlow(false)
+    val resyncing: StateFlow<Boolean> = _resyncing.asStateFlow()
+
+    /** Short-lived outcome line for the sync toast ("Library updated · 812 games"). */
+    private val _syncMessage = MutableStateFlow<String?>(null)
+    val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
+
     private val _nowPlayingSystems = MutableStateFlow<Set<String>>(emptySet())
     val nowPlayingSystems: StateFlow<Set<String>> = _nowPlayingSystems.asStateFlow()
 
@@ -128,6 +136,7 @@ class MainViewModel @Inject constructor(
     private var fileObserverJob: Job? = null
     private var scrapeCollectionJob: Job? = null
     private var updateJob: Job? = null
+    private var syncMessageJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -169,7 +178,14 @@ class MainViewModel @Inject constructor(
         _currentScreen.value = Screen.SystemList
     }
 
-    fun triggerFullScan(romRoot: String? = null) {
+    /**
+     * [resync] marks a rescan the user asked for: it shows progress in the sync
+     * toast and scrapes artwork for anything new once the scan lands.
+     */
+    fun triggerFullScan(romRoot: String? = null, resync: Boolean = false) {
+        // A file-change rescan can replace a resync mid-run. It inherits the
+        // toast and the follow-up scrape so the user's request isn't dropped.
+        val isResync = resync || (scanJob?.isActive == true && _resyncing.value)
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             val hadLibrary = _uiState.value is MainUiState.LibraryLoaded
@@ -179,24 +195,44 @@ class MainViewModel @Inject constructor(
 
             val root = romRoot ?: currentRoot
             if (root.isEmpty()) {
+                _resyncing.value = false
                 if (!hadLibrary || isNewRoot) _uiState.value = MainUiState.Error("No ROM root configured")
                 return@launch
             }
 
+            // The full-screen scanner already covers a first scan.
+            val showToast = isResync && hadLibrary && !isNewRoot
+            _resyncing.value = showToast
             _scanProgress.value = ScanProgress()
             val result = repository.scanLibrary(root, force = true) { gameName, systemName, count, total ->
                 _scanProgress.value = ScanProgress(gameName, systemName, count, total)
             }
+            _resyncing.value = false
             result.fold(
                 onSuccess = { library ->
                     _uiState.value = MainUiState.LibraryLoaded(library)
                     startFileObserver(library.romRoot)
+                    if (isResync) {
+                        val summary = "Library updated · ${library.allGames.size} games"
+                        if (showToast) showSyncMessage(summary)
+                        scrapeAll(summary.takeIf { showToast })
+                    }
                 },
                 onFailure = { error ->
                     android.util.Log.e("Taizi", "Scan failed: ${error.message}", error)
                     if (!hadLibrary || isNewRoot) _uiState.value = MainUiState.Error(error.message ?: "Scan failed")
+                    if (showToast) showSyncMessage("Rescan failed: ${error.message ?: "unknown error"}")
                 }
             )
+        }
+    }
+
+    private fun showSyncMessage(message: String) {
+        syncMessageJob?.cancel()
+        _syncMessage.value = message
+        syncMessageJob = viewModelScope.launch {
+            delay(3500)
+            _syncMessage.value = null
         }
     }
 
@@ -367,11 +403,22 @@ class MainViewModel @Inject constructor(
 
     val scrapeStatus: StateFlow<ScrapeStatus> = BoxArtScrapeService.status
 
-    fun scrapeAll() {
+    /** [summary] is repeated when the scrape ends, since its progress hides the original. */
+    fun scrapeAll(summary: String? = null) {
         BoxArtScrapeService.start(appContext)
         scrapeCollectionJob?.cancel()
         scrapeCollectionJob = viewModelScope.launch {
+            var wasRunning = false
             scrapeStatus.collect { status ->
+                if (wasRunning && !status.isRunning) {
+                    val artwork = when {
+                        status.scraped == 0 -> null
+                        summary == null -> "Added artwork for ${status.scraped} games"
+                        else -> "${status.scraped} new cover${if (status.scraped == 1) "" else "s"}"
+                    }
+                    listOfNotNull(summary, artwork).joinToString(" · ").ifEmpty { null }?.let(::showSyncMessage)
+                }
+                wasRunning = status.isRunning
                 if (!status.isRunning && status.current > 0) {
                     val lib = repository.getLibrary().value
                     if (lib.romRoot.isNotEmpty()) {
